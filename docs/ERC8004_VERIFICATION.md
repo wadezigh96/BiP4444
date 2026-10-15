@@ -1,31 +1,27 @@
 # ERC-8004 Verification on BNB Smart Chain
 
-**Status:** Planning  
+**Status:** In progress  
 **Last updated:** 2026-10-16  
 **Network:** BNB Smart Chain mainnet (chain ID 56)
 
 ## Known CREATE2 addresses (reference)
-
-These addresses are the widely published deterministic deployments used across multiple chains:
 
 | Contract | Address |
 |----------|---------|
 | Identity Registry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Reputation Registry | `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63` |
 
-> **Action required:** Before any production use, verify on BSC:
-> 1. Contract code exists at the address.
-> 2. Bytecode matches the expected reference implementation.
-> 3. Relevant events (`Registered`, ownership, etc.) behave as documented.
-> 4. `ownerOf(agentId)` and other view functions used by BIP4444 return correct results.
+These are the widely published deterministic deployments used across multiple mainnets (including BSC).
 
-## Verification steps (to be performed and recorded)
+## Verification steps
 
-- [ ] Confirm contract code at Identity Registry address on BSCScan / RPC.
-- [ ] Compare deployed bytecode (or creation code) with the official reference.
-- [ ] Call `ownerOf` / registration views for known agent IDs.
-- [ ] Document the exact ABI subset BIP4444 will depend on.
-- [ ] Record block number / timestamp of verification for audit trail.
+- [x] Document official addresses and sources  
+- [x] Add verification helper script (`scripts/verify-erc8004-bsc.js`)  
+- [x] Create evidence stub (`docs/evidence/ERC8004_BSC_2026-10-16.md`)  
+- [ ] Run script against live BSC RPC and record full output  
+- [ ] Compare deployed bytecode with reference implementation and record hash  
+- [ ] Document exact ABI subset used by BIP4444  
+- [ ] Record block number / timestamp of final verification
 
 ## Integration rules for BIP4444
 
@@ -33,9 +29,17 @@ These addresses are the widely published deterministic deployments used across m
 - Membership controller must treat the current `ownerOf(agentId)` as the authoritative controller of that identity (subject to final policy on transfers).
 - Do not assume ERC-8004 itself enforces the 4,444 BIP member limit — that limit belongs to the BIP membership controller.
 
-## References (external)
+## How to run verification
 
-- ERC-8004 identity standard documentation and explorer resources.
-- Official registry addresses published by the standard maintainers.
+```bash
+npm install ethers
+node scripts/verify-erc8004-bsc.js
+```
 
-Update this document with the actual verification evidence (tx hashes, bytecode hashes, screenshots, or scripts) before marking the corresponding audit gate complete.
+Paste the console output into `docs/evidence/` when the run is complete.
+
+## References
+
+- https://github.com/erc-8004/erc-8004-contracts  
+- https://erc-8004.quicknode.com/docs/contracts  
+- https://bscscan.com/address/0x8004A169FB4a3325136EB29fA0ceB6D2e539a432

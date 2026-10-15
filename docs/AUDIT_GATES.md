@@ -6,13 +6,17 @@
 ## Gates
 
 - [ ] **Repository and dependency review**  
-  Current state: repository contains only specification and planning docs. Re-run when code and dependencies are added.
+  Current state: specification, planning docs, and skeleton contracts only. Re-run when production dependencies and full implementation are added.  
+  Tracking: Issue (see GitHub issues)
 
 - [ ] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
-  See `docs/ERC8004_VERIFICATION.md`. Evidence (bytecode hash, block number, etc.) must be recorded.
+  Addresses documented; verification script + evidence stub added.  
+  Remaining: live RPC run + bytecode hash comparison.  
+  See `docs/ERC8004_VERIFICATION.md` and `docs/evidence/ERC8004_BSC_2026-10-16.md`.
 
 - [ ] **Membership-cap and duplicate-registration tests**  
-  See `docs/MEMBERSHIP_CONTROLLER.md`. Must prove hard cap of 4,444 and no duplicate agentId.
+  Skeleton contract exists (`contracts/src/BIPMembershipController.sol`).  
+  Remaining: full test suite proving hard cap of 4,444 and no duplicate agentId.
 
 - [ ] **x402 facilitator and settlement verification**  
   See `docs/X402_REQUIREMENTS.md`. All negative tests must pass.
@@ -34,7 +38,7 @@
 
 ## Evidence location
 
-When a gate is completed, record the evidence (PR link, test output, bytecode hash, review notes, etc.) in this file or in a linked `docs/evidence/` entry.
+When a gate is completed, record the evidence (PR link, test output, bytecode hash, review notes, etc.) in this file or under `docs/evidence/`.
 
 ## Security-first rule
 
