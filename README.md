@@ -2,7 +2,7 @@
 
 **BIP4444** is a security-focused identity and response layer for AI agents on BNB Smart Chain (BSC). Its purpose is to help participating agents and their operators identify risk, receive authenticated alerts, and follow clear rescue guidance during security incidents.
 
-> **Current status:** specification and security planning. This README does not claim that contracts, x402 payments, Alert Shield feeds, or production deployment are implemented or audited.
+> **Current status:** specification and security planning. This repository does not claim that contracts, x402 payments, Alert Shield feeds, or production deployment are implemented or audited.
 
 ## Core principles
 
@@ -12,6 +12,27 @@
 - **Payments:** use x402 for eligible registration and paid services, subject to verification of a supported BSC facilitator, asset, settlement, and replay protections.
 - **Emergency Shield mode:** **Alert Shield** — risk detection, authenticated warnings, and rescue instructions.
 - **Privacy:** never ask for or store an agent operator's seed phrase or private key.
+
+## Repository structure
+
+```
+BiP4444/
+├── README.md
+├── docs/
+│   ├── SECURITY.md                 # Security principles & threat model
+│   ├── MEMBERSHIP_CONTROLLER.md    # On-chain membership design
+│   ├── X402_REQUIREMENTS.md        # Payment safety requirements
+│   ├── ALERT_SHIELD.md             # Alert authenticity & response
+│   ├── ERC8004_VERIFICATION.md     # BSC registry verification checklist
+│   ├── AUDIT_GATES.md              # Release gates (must all pass)
+│   └── evidence/                   # Place for verification evidence
+├── contracts/
+│   ├── interfaces/
+│   │   └── IBIPMembershipController.sol
+│   └── src/                        # Implementation (not yet written)
+├── test/                           # Tests (not yet written)
+└── scripts/                        # Deploy / verification scripts (not yet written)
+```
 
 ## What Alert Shield does
 
@@ -34,23 +55,18 @@ The design must therefore define and audit a membership controller/registry that
 - clear ownership/identity checks and handling for transfers or changed agent owners;
 - protected administrator permissions and an emergency procedure.
 
-Whether membership can be revoked, transferred, or reactivated must be specified before implementation. The cap must not rely only on frontend checks or a server-side counter.
+See **[docs/MEMBERSHIP_CONTROLLER.md](docs/MEMBERSHIP_CONTROLLER.md)** for the current design.
 
-## x402 payment safety
+## Technical documentation
 
-Before any production payment flow is enabled, verify the exact facilitator, supported BSC network and asset, payment recipient, amount, expiry, and settlement result. Access or membership must not be granted merely because a client claims it paid.
-
-Required negative tests include expired payments, wrong chain, wrong asset, wrong recipient, wrong amount, replayed payment proofs, duplicate registration, and failed or delayed settlement. No live payment is implied by this specification.
-
-## Security requirements
-
-- Keep passwords, passkeys, signing keys, and recovery secrets off-chain; never log or expose secrets.
-- Use signed/authenticated alerts and a documented process for trusted reporters and key rotation.
-- Rate-limit public endpoints and protect against spam, replay, phishing, and denial-of-service attempts.
-- Minimize personal data in QR codes and public records. A verification QR should point to an official HTTPS domain and disclose only necessary information.
-- Review contract access control, reentrancy, accounting, membership-cap invariants, upgradeability, and dependency risks.
-- Test against a local fork or test environment before any mainnet deployment.
-- Do not deploy or enable production payments until the security review and tests pass.
+| Document | Description |
+|----------|-------------|
+| [docs/SECURITY.md](docs/SECURITY.md) | Security principles, threat model, operational rules |
+| [docs/MEMBERSHIP_CONTROLLER.md](docs/MEMBERSHIP_CONTROLLER.md) | Membership controller specification & interface sketch |
+| [docs/X402_REQUIREMENTS.md](docs/X402_REQUIREMENTS.md) | x402 payment safety & negative tests |
+| [docs/ALERT_SHIELD.md](docs/ALERT_SHIELD.md) | Alert authenticity and response design |
+| [docs/ERC8004_VERIFICATION.md](docs/ERC8004_VERIFICATION.md) | BSC ERC-8004 registry verification checklist |
+| [docs/AUDIT_GATES.md](docs/AUDIT_GATES.md) | Full release gate checklist |
 
 ## Passport interface concept
 
@@ -66,7 +82,9 @@ The QR is a verification link, not a secret or authentication credential.
 
 ## Audit and release gates
 
-The project should not be considered production-ready until these gates are completed and evidence is recorded:
+The project should not be considered production-ready until these gates are completed and evidence is recorded. Full list and tracking: **[docs/AUDIT_GATES.md](docs/AUDIT_GATES.md)**.
+
+Summary:
 
 - [ ] Repository and dependency review
 - [ ] Verification of the actual BSC ERC-8004 registry address and deployed bytecode
