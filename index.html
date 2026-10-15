@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1020">
+  <meta name="description" content="BIP4444 — Binance Intelligence Passport, an agent identity and security-alert concept for BNB Smart Chain.">
+  <title>BIP4444 — Intelligence Passport</title>
+  <style>
+    :root{color-scheme:dark;--bg:#080d18;--panel:#101827;--panel2:#141f31;--line:#26354a;--text:#edf3ff;--muted:#9eacc2;--gold:#f0c66b;--cyan:#79e0dc;--red:#ff8b8b;--green:#8fe0b3;--radius:18px}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% -10%,#193047 0,transparent 42%),var(--bg);color:var(--text);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    a{color:var(--cyan);text-decoration:none}a:hover{text-decoration:underline}button{font:inherit;cursor:pointer}
+    .shell{max-width:1180px;margin:auto;padding:24px 22px 56px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding-bottom:20px}
+    .brand{display:flex;align-items:center;gap:12px}.mark{width:44px;height:44px;display:grid;place-items:center;border-radius:13px;border:1px solid #79683e;background:linear-gradient(145deg,#29291f,#111927);color:var(--gold);font-weight:900;letter-spacing:-2px}.brand strong{display:block;font-size:16px;letter-spacing:.12em}.brand small{color:var(--muted);font-size:12px}
+    .status{display:flex;align-items:center;gap:8px;border:1px solid #3b554c;color:var(--green);background:#10231f;padding:8px 12px;border-radius:999px;font-size:12px}.dot{width:7px;height:7px;background:currentColor;border-radius:50%}
+    .hero{display:grid;grid-template-columns:1.25fr .75fr;gap:22px;padding:44px 0 26px;align-items:stretch}.eyebrow{color:var(--gold);font-size:11px;font-weight:800;letter-spacing:.19em;text-transform:uppercase}.hero h1{font-size:clamp(34px,5vw,58px);line-height:1.03;letter-spacing:-.045em;margin:13px 0 16px;max-width:720px}.hero h1 span{color:var(--gold)}.lead{color:var(--muted);max-width:670px;font-size:16px}.hero-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+    .btn{border:1px solid var(--line);border-radius:11px;padding:11px 15px;color:var(--text);background:var(--panel2)}.btn.primary{background:var(--gold);border-color:var(--gold);color:#17150f;font-weight:800}.btn:hover{filter:brightness(1.08)}.btn:focus-visible,a:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+    .passport{position:relative;overflow:hidden;border:1px solid #6e603e;border-radius:var(--radius);padding:22px;background:linear-gradient(145deg,#24271f,#111b29 68%);min-height:260px}.passport:after{content:"";position:absolute;width:210px;height:210px;border:1px solid #b79a4a2b;border-radius:50%;right:-68px;top:-68px;box-shadow:0 0 0 24px #b79a4a0c,0 0 0 48px #b79a4a08}.pass-head{display:flex;justify-content:space-between;gap:10px;color:var(--gold);font-size:11px;letter-spacing:.14em;font-weight:800}.seal{border:1px solid #8c794b;border-radius:50%;width:62px;height:62px;display:grid;place-items:center;color:var(--gold);font-size:24px;margin:22px 0 12px}.passport h2{margin:0;font-size:22px}.passport p{color:var(--muted);margin:4px 0}.pass-foot{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-top:24px;padding-top:14px;border-top:1px solid #ffffff1a}.pass-id{font:12px ui-monospace,SFMono-Regular,monospace;color:var(--gold)}.qr{width:55px;height:55px;background:repeating-conic-gradient(#dfe7d8 0 25%,#1a2225 0 50%) 0/10px 10px;border:5px solid #e8eee0;border-radius:4px;opacity:.85}.qr-note{font-size:10px;color:var(--muted);max-width:140px}
+    .section-head{display:flex;justify-content:space-between;align-items:end;gap:14px;margin:28px 0 14px}.section-head h2{margin:0;font-size:21px;letter-spacing:-.02em}.section-head p{margin:3px 0 0;color:var(--muted);font-size:13px}
+    .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{border:1px solid var(--line);border-radius:var(--radius);padding:19px;background:linear-gradient(160deg,#121d2c,#0e1522)}.card-label{color:var(--muted);font-size:12px}.metric{font-size:28px;letter-spacing:-.04em;font-weight:750;margin:9px 0 4px}.hint{color:var(--muted);font-size:12px}.tag{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);padding:4px 8px;border-radius:7px;font-size:11px;color:var(--muted)}.tag.gold{color:var(--gold);border-color:#655536}.tag.warn{color:#ffd28a;border-color:#655536}
+    .lower{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.list{display:grid;gap:0}.item{display:flex;align-items:start;gap:12px;padding:13px 0;border-bottom:1px solid #253248}.item:last-child{border-bottom:0;padding-bottom:0}.item-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#1b2b3a;color:var(--cyan);flex:none}.item strong{display:block;font-size:13px}.item p{margin:3px 0 0;color:var(--muted);font-size:12px}
+    .notice{border:1px solid #695534;background:#201d16;color:#d7c69c;border-radius:13px;padding:13px 15px;font-size:12px;margin-top:18px}.notice strong{color:var(--gold)}footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:28px;padding-top:18px;color:var(--muted);font-size:12px}
+    .panel{display:none}.panel.active{display:block}.alert-box{padding:14px;border:1px solid var(--line);border-radius:12px;background:#101a28;margin-top:10px}.alert-box h3{margin:0 0 5px;font-size:14px}.alert-box p{margin:0;color:var(--muted);font-size:12px}
+    @media(max-width:800px){.hero{grid-template-columns:1fr;padding-top:30px}.grid{grid-template-columns:1fr 1fr}.lower{grid-template-columns:1fr}.passport{min-height:250px}}@media(max-width:520px){.shell{padding:17px 14px 38px}.brand strong{font-size:13px}.status{font-size:10px;padding:7px 9px}.grid{grid-template-columns:1fr}.hero h1{font-size:39px}.section-head{align-items:start;flex-direction:column}.pass-foot{align-items:center}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top">
+      <div class="brand"><div class="mark" aria-hidden="true">BIP</div><div><strong>BIP4444</strong><small>BINANCE INTELLIGENCE PASSPORT</small></div></div>
+      <div class="status"><span class="dot"></span> FOUNDATION PREVIEW</div>
+    </header>
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Identity · Intelligence · Response</div>
+        <h1>A clearer response to <span>agent risk.</span></h1>
+        <p class="lead">A security-first passport concept for AI agents on BNB Smart Chain. Connect identity signals with authenticated incident alerts and practical response guidance.</p>
+        <div class="hero-actions">
+          <button class="btn primary" id="viewPassport">View passport concept ↗</button>
+          <button class="btn" id="viewShield">Explore Alert Shield</button>
+        </div>
+      </div>
+      <article class="passport" id="passportCard" aria-label="Illustrative passport card">
+        <div class="pass-head"><span>MEMBER PASSPORT</span><span>BSC · 56</span></div>
+        <div class="seal" aria-hidden="true">✳</div>
+        <h2>Agent Identity</h2><p>Alias not yet registered</p>
+        <div class="pass-foot"><div><div class="card-label">PASSPORT REFERENCE</div><div class="pass-id">BIP — NOT ISSUED</div><div class="qr-note">Illustrative verification mark only. No membership or identity is verified.</div></div><div class="qr" role="img" aria-label="Decorative placeholder, not a real QR code"></div></div>
+      </article>
+    </section>
+    <section>
+      <div class="section-head"><div><h2>Protocol overview</h2><p>Planned constraints, not live on-chain data.</p></div><span class="tag gold">DESIGN STAGE</span></div>
+      <div class="grid">
+        <article class="card"><div class="card-label">Membership ceiling</div><div class="metric">4,444</div><div class="hint">Must be enforced by audited on-chain logic.</div></article>
+        <article class="card"><div class="card-label">Identity layer</div><div class="metric">ERC-8004</div><div class="hint">Use agent identity directly; no second passport NFT planned.</div></article>
+        <article class="card"><div class="card-label">Network target</div><div class="metric">BSC · 56</div><div class="hint">Mainnet target only. No transaction is performed here.</div></article>
+      </div>
+    </section>
+    <section class="lower">
+      <article class="card">
+        <div class="section-head" style="margin:0 0 6px"><div><h2>Alert Shield</h2><p>Detect · Verify · Guide</p></div><span class="tag warn">NOT CONNECTED</span></div>
+        <div class="list">
+          <div class="item"><div class="item-icon">01</div><div><strong>Signal monitoring</strong><p>Planned monitoring of documented risk signals and trusted incident sources.</p></div></div>
+          <div class="item"><div class="item-icon">02</div><div><strong>Authenticated alerts</strong><p>Alerts should include provenance, timestamps, severity, and confidence.</p></div></div>
+          <div class="item"><div class="item-icon">03</div><div><strong>Rescue guidance</strong><p>Point members to verified instructions. Never ask for seed phrases or private keys.</p></div></div>
+        </div>
+        <div class="panel" id="shieldPanel"><div class="alert-box"><h3>Safe-response policy</h3><p>This preview does not monitor wallets, block transactions, reverse finalized transactions, or recover funds. Verify every alert using independently trusted official sources.</p></div></div>
+      </article>
+      <article class="card">
+        <div class="section-head" style="margin:0 0 6px"><div><h2>Integration readiness</h2><p>Current honest status</p></div><span class="tag">READ-ONLY</span></div>
+        <div class="list">
+          <div class="item"><div class="item-icon">✓</div><div><strong>Environment names recorded</strong><p>Names are configured in Vercel; credential validity and runtime use are unverified.</p></div></div>
+          <div class="item"><div class="item-icon">…</div><div><strong>Privy wallet connection</strong><p>Not implemented in this static foundation.</p></div></div>
+          <div class="item"><div class="item-icon">…</div><div><strong>Binance API integration</strong><p>No API requests or credentials are used by this page.</p></div></div>
+          <div class="item"><div class="item-icon">…</div><div><strong>x402 membership payments</strong><p>Facilitator, payment verification, and settlement flow remain to be designed and tested.</p></div></div>
+        </div>
+      </article>
+    </section>
+    <div class="notice"><strong>Security notice:</strong> This is a static interface foundation, not a live passport, wallet, security monitor, payment system, or audited protocol. The decorative QR is not scannable. Never enter or share a seed phrase, private key, API secret, or wallet recovery code.</div>
+    <footer><span>© BIP4444 · Security-first foundation</span><span>Built for BNB Smart Chain · No wallet connected</span><span><a href="https://github.com/wadezigh96/BiP4444">Source repository ↗</a></span></footer>
+  </main>
+  <script>
+    const passportButton = document.getElementById('viewPassport');
+    const shieldButton = document.getElementById('viewShield');
+    const passportCard = document.getElementById('passportCard');
+    const shieldPanel = document.getElementById('shieldPanel');
+    passportButton.addEventListener('click', () => {
+      passportCard.scrollIntoView({behavior:'smooth',block:'center'});
+      passportCard.style.outline = '2px solid var(--gold)';
+      setTimeout(() => { passportCard.style.outline = 'none'; }, 1200);
+    });
+    shieldButton.addEventListener('click', () => {
+      shieldPanel.classList.toggle('active');
+      shieldButton.textContent = shieldPanel.classList.contains('active') ? 'Hide Shield details' : 'Explore Alert Shield';
+      shieldPanel.scrollIntoView({behavior:'smooth',block:'nearest'});
+    });
+  </script>
+</body>
+</html>
