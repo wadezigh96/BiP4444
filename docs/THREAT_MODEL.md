@@ -2,11 +2,11 @@
 
 ## Scope and status
 
-This is a preliminary threat model for planning. It is not an audit or a claim that any security control is implemented. The current static interface performs no wallet, payment, API, or blockchain operation.
+This is a preliminary threat model, not an independent security audit. The current static interface remains illustrative. A minimal read-only `GET /api/session` endpoint now verifies Privy access tokens using the official `@privy-io/node` package. It has not yet been verified against a configured key and real test token. No login UI, wallet action, payment, membership issuance, or blockchain transaction is implemented.
 
 ## Assets to protect
 
-- Privy server credentials and wallet/session authorization.
+- Privy verification configuration and any server credentials.
 - Binance or other provider API credentials.
 - ERC-8004 identity references and membership status.
 - x402 payment proofs and settlement decisions.
@@ -16,6 +16,7 @@ This is a preliminary threat model for planning. It is not an audit or a claim t
 ## Trust boundaries
 
 - Browser UI is untrusted; never rely on it to enforce membership limits, authorization, payment success, or alert authenticity.
+- The session endpoint must verify the access token cryptographically; never trust decoded JWT claims without verification.
 - Vercel environment configuration is separate from runtime usage. A stored variable may be unused, misnamed, incorrectly scoped, or invalid.
 - External API responses may be stale, malformed, compromised, or unavailable.
 - Public blockchain data is observable and may lag or require confirmation; verify network and contract addresses.
@@ -26,6 +27,8 @@ This is a preliminary threat model for planning. It is not an audit or a claim t
 | Threat | Required mitigation / test |
 |---|---|
 | Secret exposed in frontend bundle or logs | Keep server secrets server-only; inspect built assets and logs; redact values. |
+| Forged or expired Privy token | Use the official verifier, require the correct app ID and verification key, reject invalid tokens with 401, and never log bearer tokens. |
+| Missing or incorrect auth configuration | Fail closed with 503; never bypass verification to make login appear to work. |
 | API key has excessive permissions | Use least privilege, disable withdrawals/trading unless strictly required, use IP restrictions where supported, rotate if exposed. |
 | Fake wallet or identity state | Verify session on the server and confirm chain, registry, token/agent identity and ownership from trusted sources. |
 | Membership cap bypass | Enforce the 4,444 cap atomically on-chain; test concurrent registration and duplicate identity attempts. |
@@ -49,8 +52,9 @@ This is a preliminary threat model for planning. It is not an audit or a claim t
 
 ## Open decisions before production
 
+- Verify the Privy verification key configuration and complete safe endpoint tests.
+- Privy login/wallet model and authorization requirements beyond basic authentication.
 - Exact provider and documented purpose for each `B_*` and `BX_*` environment variable.
-- Privy login/wallet model and server-side session validation.
 - Production x402 facilitator and BSC-compatible settlement details.
 - Membership controller design and how ERC-8004 transfers affect membership.
 - Trusted alert publishers, signature/key rotation, severity model and false-positive process.
