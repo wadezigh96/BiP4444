@@ -1,7 +1,7 @@
 # BIP4444 Audit and Release Gates
 
-**Policy:** The project is not production-ready until every gate below is completed and evidence is recorded.  
-**Last updated:** 2026-10-16
+**Policy:** The project is not production-ready until every gate below is completed and evidence is recorded. No mainnet deployment, live payment enablement, or mainnet transaction is authorized by this branch.  
+**Last updated:** 2026-10-17
 
 ## Gates
 
@@ -11,8 +11,8 @@
 - [x] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
 
-- [x] **Membership-cap and duplicate-registration tests** *(existing skeleton unit suite — local)*  
-  Evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md`. These tests do not audit future relayer functionality.
+- [ ] **Membership-cap and duplicate-registration tests**  
+  Historical evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` records the earlier skeleton suite. The latest GitHub Actions run failed before compiling because `forge-std/Test.sol` was missing; do not treat that historical result as validation of the current branch. A dependency-install step has been added and the updated suite must pass CI.
 
 - [ ] **Membership API implementation and persistent ledger**  
   API contract drafted in `docs/API_REGISTER.md`. No production route, database-backed ledger, or runtime evidence is claimed yet.
@@ -21,7 +21,7 @@
   Design locked (B402, 5 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Runtime evidence TBD. Verify current official B402 API/SDK documentation before implementing an adapter.
 
 - [ ] **Relayer registration security**  
-  `registerFor` + `RELAYER_ROLE` not implemented. Require authorization, pause/cap/duplicate tests, key management, and independent review.
+  The branch now includes an allowlisted relayer path with EIP-712 owner consent bound to agent ID, payment-operation hash, role hash, nonce, deadline, chain ID, and controller address; it also enforces payment-hash replay protection and a maximum signature lifetime. Current tests are not yet CI-verified. B402 settlement is still an off-chain trust boundary; persistent ledger, verified payment binding, key management, and independent review remain required.
 
 - [ ] **Alert authenticity, reporter authorization, and key-rotation tests**  
   Design: `docs/ALERT_SHIELD.md`. Feed, signing/verifying implementation, public key directory validation, §11 tests, and evidence remain pending.
@@ -33,7 +33,7 @@
   Existing membership skeleton tests are recorded; relayer, x402, API, and alert tests pending.
 
 - [ ] **CI reproducibility**  
-  Foundry GitHub Actions workflow added at `.github/workflows/forge-test.yml` on the implementation branch. Gate remains open until the workflow runs successfully on GitHub and the result is reviewed.
+  `.github/workflows/forge-test.yml` now installs pinned `forge-std` v1.9.7 explicitly. Gate remains open until a new workflow run succeeds, the full test output is reviewed, and the result is recorded as evidence.
 
 - [ ] **Independent review of contracts and deployment configuration**
 
