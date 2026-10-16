@@ -5,27 +5,15 @@ import {IBIPMembershipController} from "../interfaces/IBIPMembershipController.s
 import {IERC8004Identity} from "../interfaces/IERC8004Identity.sol";
 
 /// @title BIPMembershipController
-/// @notice Skeleton implementation of BIP4444 membership controller.
-/// @dev PLANNING / PRE-AUDIT ARTIFACT ONLY.
-///      - Do NOT deploy to mainnet until all gates in docs/AUDIT_GATES.md pass.
-///      - Open questions (revoke policy, ownership change handling, x402 proof)
-///        must be resolved before finalizing this contract.
-///      - Access control, pause, and admin model are placeholders.
+/// @notice Pre-audit membership registry referencing existing ERC-8004 identities.
+/// @dev NOT production-ready. Do not deploy to mainnet until all audit gates pass.
+///      Payment verification remains an off-chain responsibility; registerFor must
+///      only be called by a backend relayer after confirmed B402 settlement.
 contract BIPMembershipController is IBIPMembershipController {
-    // -------------------------------------------------------------------------
-    // Constants
-    // -------------------------------------------------------------------------
-    /// @dev Hard cap of active BIP memberships. Exposed via MAX_MEMBERS().
     uint256 private constant _MAX_MEMBERS = 4444;
 
-    // -------------------------------------------------------------------------
-    // Immutable / configuration
-    // -------------------------------------------------------------------------
     IERC8004Identity public immutable identityRegistry;
 
-    // -------------------------------------------------------------------------
-    // Storage
-    // -------------------------------------------------------------------------
     struct Membership {
         uint256 membershipId;
         address registeredBy;
@@ -33,24 +21,17 @@ contract BIPMembershipController is IBIPMembershipController {
         bool active;
     }
 
-    /// @dev agentId => Membership
     mapping(uint256 => Membership) private _memberships;
+    mapping(address => bool) public isRelayer;
 
-    /// @dev Sequential membership ID (starts at 1)
     uint256 private _nextMembershipId = 1;
-
-    /// @dev Number of currently active memberships
     uint256 private _activeMemberCount;
 
-    /// @dev Simple owner for skeleton; replace with AccessControl / multisig later
     address public owner;
-
     bool public paused;
 
-    // -------------------------------------------------------------------------
-    // Errors
-    // -------------------------------------------------------------------------
     error NotOwner();
+    error NotRelayer();
     error PausedError();
     error NotPausedError();
     error CapReached();
@@ -60,11 +41,13 @@ contract BIPMembershipController is IBIPMembershipController {
     error ZeroAddress();
     error ZeroAgentId();
 
-    // -------------------------------------------------------------------------
-    // Modifiers
-    // -------------------------------------------------------------------------
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyRelayer() {
+        if (!isRelayer[msg.sender]) revert NotRelayer();
         _;
     }
 
@@ -73,18 +56,12 @@ contract BIPMembershipController is IBIPMembershipController {
         _;
     }
 
-    // -------------------------------------------------------------------------
-    // Constructor
-    // -------------------------------------------------------------------------
     constructor(address identityRegistry_) {
         if (identityRegistry_ == address(0)) revert ZeroAddress();
         identityRegistry = IERC8004Identity(identityRegistry_);
         owner = msg.sender;
     }
 
-    // -------------------------------------------------------------------------
-    // Views
-    // -------------------------------------------------------------------------
     function MAX_MEMBERS() external pure override returns (uint256) {
         return _MAX_MEMBERS;
     }
@@ -107,29 +84,32 @@ contract BIPMembershipController is IBIPMembershipController {
         return (m.membershipId, m.registeredBy, m.registeredAt, m.active);
     }
 
-    // -------------------------------------------------------------------------
-    // Registration
-    // -------------------------------------------------------------------------
-    /// @notice Register an ERC-8004 agent as a BIP member.
-    /// @dev Current policy (skeleton):
-    ///      - Caller must be the current ownerOf(agentId) on the identity registry.
-    ///      - Cap and uniqueness enforced on-chain.
-    ///      - Payment verification (x402) is NOT implemented yet.
+    /// @notice Self-service registration; caller must own the ERC-8004 identity.
     function register(uint256 agentId) external override whenNotPaused {
         if (agentId == 0) revert ZeroAgentId();
-
-        // Ownership check against ERC-8004
         address agentOwner = identityRegistry.ownerOf(agentId);
         if (agentOwner != msg.sender) revert NotAgentOwner();
+        _register(agentId, agentOwner, msg.sender);
+    }
 
+    /// @notice Backend-relayer registration after confirmed payment settlement.
+    /// @dev Contract cannot verify off-chain x402 settlement; relayer compromise is a
+    ///      critical trust risk. Never grant this role to a public or user-controlled key.
+    function registerFor(uint256 agentId) external override onlyRelayer whenNotPaused {
+        if (agentId == 0) revert ZeroAgentId();
+        address agentOwner = identityRegistry.ownerOf(agentId);
+        _register(agentId, agentOwner, msg.sender);
+    }
+
+    function _register(uint256 agentId, address agentOwner, address operator) internal {
         Membership storage m = _memberships[agentId];
         if (m.active) revert AlreadyMember();
-
         if (_activeMemberCount >= _MAX_MEMBERS) revert CapReached();
 
         uint256 newId = _nextMembershipId++;
         m.membershipId = newId;
-        m.registeredBy = msg.sender;
+        // Store the identity owner, while the event records the actual operator.
+        m.registeredBy = agentOwner;
         m.registeredAt = uint64(block.timestamp);
         m.active = true;
 
@@ -137,14 +117,16 @@ contract BIPMembershipController is IBIPMembershipController {
             _activeMemberCount += 1;
         }
 
-        emit MembershipRegistered(agentId, newId, msg.sender);
+        emit MembershipRegistered(agentId, newId, operator);
     }
 
-    // -------------------------------------------------------------------------
-    // Status management (policy still open)
-    // -------------------------------------------------------------------------
-    /// @notice Revoke membership. Skeleton: only contract owner can revoke.
-    /// @dev Final policy (member self-revoke vs admin-only) must be decided.
+    /// @notice Owner-controlled allowlist for the backend relayer.
+    function setRelayer(address relayer, bool enabled) external override onlyOwner {
+        if (relayer == address(0)) revert ZeroAddress();
+        isRelayer[relayer] = enabled;
+        emit RelayerUpdated(relayer, enabled);
+    }
+
     function revoke(uint256 agentId) external override onlyOwner whenNotPaused {
         Membership storage m = _memberships[agentId];
         if (!m.active) revert NotMember();
@@ -169,9 +151,6 @@ contract BIPMembershipController is IBIPMembershipController {
         emit Unpaused(msg.sender);
     }
 
-    // -------------------------------------------------------------------------
-    // Admin helpers (skeleton)
-    // -------------------------------------------------------------------------
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
         owner = newOwner;
