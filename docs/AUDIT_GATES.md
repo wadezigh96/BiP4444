@@ -9,21 +9,14 @@
   Current state: specification, planning docs, skeleton contracts, and Foundry tests only. Re-run when production dependencies and full implementation are added.
 
 - [x] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
-  Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`  
-  - Chain ID 56 confirmed  
-  - Identity & Reputation proxies have code  
-  - EIP-1967 implementations resolved  
-  - `ownerOf` / `name` / `symbol` / ERC-721 interface verified on live BSC  
-  - Optional: full bytecode hash vs official release artifact
+  Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
 
 - [x] **Membership-cap and duplicate-registration tests** *(unit suite — local)*  
-  Evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md`  
-  - 22/22 Foundry tests passed (including `test_Cap_ReachedAt4444`)  
-  - Cap 4444, duplicate rejection, ownership checks covered  
-  - Still skeleton code; policy open questions remain before production
+  Evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md`
 
 - [ ] **x402 facilitator and settlement verification**  
-  See `docs/X402_REQUIREMENTS.md`. All negative tests must pass.
+  Design: `docs/X402_REQUIREMENTS.md` (flow, facilitators, negative tests).  
+  Remaining: choose production facilitator, implement verify/settle adapter, pass all negative tests, record evidence.
 
 - [ ] **Alert authenticity, reporter authorization, and key-rotation tests**  
   See `docs/ALERT_SHIELD.md`.
@@ -32,7 +25,7 @@
   Covers endpoints, QR codes, and public records.
 
 - [ ] **Unit, integration, and negative security tests**  
-  Unit membership tests done; broader integration / payment / alert tests still pending.
+  Unit membership tests done; x402 and alert tests still pending.
 
 - [ ] **Independent review of contracts and deployment configuration**  
   External or second-pair review of final contracts and deploy scripts.
@@ -46,6 +39,7 @@
 |------|----------|
 | Membership cap / duplicate | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
+| x402 | Design in `docs/X402_REQUIREMENTS.md`; runtime evidence TBD |
 
 ## Security-first rule
 
