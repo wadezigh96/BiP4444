@@ -3,8 +3,8 @@
 **Status:** PASS for the current branch's Solidity unit-test suite (not an independent security audit).  
 **Repository:** `wadezigh96/BiP4444`  
 **Branch:** `feat/api-register-spec`  
-**Commit tested:** `919b74858b0e9a72bc0166dfd292d970d8347987`  
-**Workflow run:** https://github.com/wadezigh96/BiP4444/actions/runs/38957017000  
+**Commit tested:** `7c03a84accbf38591e7e69346fd644ef9066d1d9`  
+**Workflow run:** https://github.com/wadezigh96/BiP4444/actions/runs/38957210557  
 **Workflow:** `.github/workflows/forge-test.yml`
 
 ## Environment
@@ -17,9 +17,9 @@
 ## Result
 
 - `BIPMembershipRelayerTest`: **15 passed, 0 failed**
-- `BIPMembershipControllerTest`: **23 passed, 0 failed**
-- Total: **38 passed, 0 failed, 0 skipped**
-- The suite includes the 4,444-member cap, 256 fuzz runs for owner-only self-registration, EIP-712 owner-consent verification, invalid/expired/overlong signatures, role binding, reused payment ID rejection, pause behavior, relayer allowlist, and two-step ownership transfer.
+- `BIPMembershipControllerTest`: **24 passed, 0 failed**
+- Total: **39 passed, 0 failed, 0 skipped**
+- The suite includes the 4,444-member cap, 256 fuzz runs rejecting signatures from a non-owner, EIP-712 owner-consent verification, invalid/expired/overlong signatures, role binding, reused payment ID rejection, pause behavior, relayer allowlist, two-step ownership transfer, and the absence of a public free `register(uint256)` method.
 
 ## Limitations
 
