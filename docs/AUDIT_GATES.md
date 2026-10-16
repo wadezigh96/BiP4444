@@ -12,7 +12,7 @@
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
 
 - [x] **Current branch Foundry unit suite**  
-  Evidence: `docs/evidence/FOUNDRY_CI_2026-10-17.md`. GitHub Actions run passed 38 tests (15 relayer tests + 23 controller tests, including the 4,444 cap and 256 fuzz runs). This validates the tested commit's unit suite only; it is not an independent audit or payment/backend integration test.
+  Evidence: `docs/evidence/FOUNDRY_CI_2026-10-17.md`. GitHub Actions run passed 39 tests (15 relayer tests + 24 controller tests, including the 4,444 cap, 256 fuzz runs rejecting non-owner signatures, and a check that the free `register(uint256)` path is absent). This validates the tested commit's unit suite only; it is not an independent audit or payment/backend integration test.
 
 - [ ] **Membership API implementation and persistent ledger**  
   API contract drafted in `docs/API_REGISTER.md`. No production route, database-backed ledger, or runtime evidence is claimed yet.
@@ -21,7 +21,7 @@
   Design locked (B402, 5 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Runtime evidence TBD. Verify current official B402 API/SDK documentation before implementing an adapter.
 
 - [ ] **Relayer registration security**  
-  The branch now includes an allowlisted relayer path with EIP-712 owner consent bound to agent ID, payment-operation hash, role hash, nonce, deadline, chain ID, and controller address; it also enforces payment-hash replay protection and a maximum signature lifetime. Current tests are not yet CI-verified. B402 settlement is still an off-chain trust boundary; persistent ledger, verified payment binding, key management, and independent review remain required.
+  The public free `register(uint256)` method has been removed to close the payment bypass. The branch includes an allowlisted relayer path with EIP-712 owner consent bound to agent ID, payment-operation hash, role hash, nonce, deadline, chain ID, and controller address; it also enforces payment-hash replay protection and a maximum signature lifetime. Current tests are not yet CI-verified. B402 settlement is still an off-chain trust boundary; persistent ledger, verified payment binding, key management, and independent review remain required.
 
 - [ ] **Alert authenticity, reporter authorization, and key-rotation tests**  
   Design: `docs/ALERT_SHIELD.md`. Feed, signing/verifying implementation, public key directory validation, §11 tests, and evidence remain pending.
