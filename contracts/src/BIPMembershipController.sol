@@ -5,12 +5,20 @@ import {IBIPMembershipController} from "../interfaces/IBIPMembershipController.s
 import {IERC8004Identity} from "../interfaces/IERC8004Identity.sol";
 
 /// @title BIPMembershipController
-/// @notice Pre-audit membership registry referencing existing ERC-8004 identities.
-/// @dev NOT production-ready. Do not deploy to mainnet until all audit gates pass.
-///      Payment verification remains an off-chain responsibility; registerFor must
-///      only be called by a backend relayer after confirmed B402 settlement.
+/// @notice Membership registry referencing existing ERC-8004 identities.
+/// @dev Pre-audit implementation. Never deploy to mainnet until all release gates pass.
 contract BIPMembershipController is IBIPMembershipController {
     uint256 private constant _MAX_MEMBERS = 4444;
+    uint256 private constant _SECP256K1N_HALF =
+        0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
+
+    bytes32 private constant _DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant _AUTHORIZATION_TYPEHASH = keccak256(
+        "MembershipAuthorization(uint256 agentId,bytes32 paymentIdHash,bytes32 roleHash,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private constant _NAME_HASH = keccak256("BIP4444 Membership Controller");
+    bytes32 private constant _VERSION_HASH = keccak256("1");
 
     IERC8004Identity public immutable identityRegistry;
 
@@ -23,14 +31,18 @@ contract BIPMembershipController is IBIPMembershipController {
 
     mapping(uint256 => Membership) private _memberships;
     mapping(address => bool) public isRelayer;
+    mapping(address => uint256) public ownerNonces;
+    mapping(bytes32 => bool) public usedPaymentIds;
 
     uint256 private _nextMembershipId = 1;
     uint256 private _activeMemberCount;
 
     address public owner;
+    address public pendingOwner;
     bool public paused;
 
     error NotOwner();
+    error NotPendingOwner();
     error NotRelayer();
     error PausedError();
     error NotPausedError();
@@ -40,6 +52,13 @@ contract BIPMembershipController is IBIPMembershipController {
     error NotAgentOwner();
     error ZeroAddress();
     error ZeroAgentId();
+    error InvalidSignature();
+    error InvalidAuthorization();
+    error SignatureExpired();
+    error PaymentIdAlreadyUsed();
+
+    event OwnershipTransferStarted(address indexed owner, address indexed pendingOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -60,6 +79,7 @@ contract BIPMembershipController is IBIPMembershipController {
         if (identityRegistry_ == address(0)) revert ZeroAddress();
         identityRegistry = IERC8004Identity(identityRegistry_);
         owner = msg.sender;
+        emit OwnershipTransferred(address(0), msg.sender);
     }
 
     function MAX_MEMBERS() external pure override returns (uint256) {
@@ -92,13 +112,65 @@ contract BIPMembershipController is IBIPMembershipController {
         _register(agentId, agentOwner, msg.sender);
     }
 
-    /// @notice Backend-relayer registration after confirmed payment settlement.
-    /// @dev Contract cannot verify off-chain x402 settlement; relayer compromise is a
-    ///      critical trust risk. Never grant this role to a public or user-controlled key.
-    function registerFor(uint256 agentId) external override onlyRelayer whenNotPaused {
+    /// @notice Relayer registration with owner consent bound to this chain, contract, payment and role.
+    /// @dev The backend must call only after B402 settlement is confirmed. The contract cannot verify
+    ///      off-chain payment; owner signature prevents the relayer from silently enrolling an agent.
+    function registerFor(
+        uint256 agentId,
+        bytes32 paymentIdHash,
+        bytes32 roleHash,
+        uint256 deadline,
+        bytes calldata ownerSignature
+    ) external override onlyRelayer whenNotPaused {
         if (agentId == 0) revert ZeroAgentId();
+        if (paymentIdHash == bytes32(0) || roleHash == bytes32(0)) revert InvalidAuthorization();
+        if (deadline < block.timestamp) revert SignatureExpired();
+        if (usedPaymentIds[paymentIdHash]) revert PaymentIdAlreadyUsed();
+
         address agentOwner = identityRegistry.ownerOf(agentId);
+        uint256 nonce = ownerNonces[agentOwner];
+        bytes32 digest = authorizationDigest(agentId, paymentIdHash, roleHash, nonce, deadline);
+        if (_recoverSigner(digest, ownerSignature) != agentOwner) revert InvalidSignature();
+
+        // Checks-effects-interactions: no external calls follow these state changes except registry
+        // ownership lookup above. Reverts in _register roll all changes back.
+        ownerNonces[agentOwner] = nonce + 1;
+        usedPaymentIds[paymentIdHash] = true;
         _register(agentId, agentOwner, msg.sender);
+    }
+
+    /// @notice EIP-712 digest helper for clients signing the relayer authorization.
+    function authorizationDigest(
+        uint256 agentId,
+        bytes32 paymentIdHash,
+        bytes32 roleHash,
+        uint256 nonce,
+        uint256 deadline
+    ) public view returns (bytes32) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(_DOMAIN_TYPEHASH, _NAME_HASH, _VERSION_HASH, block.chainid, address(this))
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(_AUTHORIZATION_TYPEHASH, agentId, paymentIdHash, roleHash, nonce, deadline)
+        );
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+
+    function _recoverSigner(bytes32 digest, bytes calldata signature) internal pure returns (address signer) {
+        if (signature.length != 65) revert InvalidSignature();
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
+        }
+
+        if (uint256(s) > _SECP256K1N_HALF || (v != 27 && v != 28)) revert InvalidSignature();
+        signer = ecrecover(digest, v, r, s);
+        if (signer == address(0)) revert InvalidSignature();
     }
 
     function _register(uint256 agentId, address agentOwner, address operator) internal {
@@ -108,19 +180,15 @@ contract BIPMembershipController is IBIPMembershipController {
 
         uint256 newId = _nextMembershipId++;
         m.membershipId = newId;
-        // Store the identity owner, while the event records the actual operator.
         m.registeredBy = agentOwner;
         m.registeredAt = uint64(block.timestamp);
         m.active = true;
-
         unchecked {
             _activeMemberCount += 1;
         }
-
         emit MembershipRegistered(agentId, newId, operator);
     }
 
-    /// @notice Owner-controlled allowlist for the backend relayer.
     function setRelayer(address relayer, bool enabled) external override onlyOwner {
         if (relayer == address(0)) revert ZeroAddress();
         isRelayer[relayer] = enabled;
@@ -130,12 +198,10 @@ contract BIPMembershipController is IBIPMembershipController {
     function revoke(uint256 agentId) external override onlyOwner whenNotPaused {
         Membership storage m = _memberships[agentId];
         if (!m.active) revert NotMember();
-
         m.active = false;
         unchecked {
             _activeMemberCount -= 1;
         }
-
         emit MembershipRevoked(agentId, m.membershipId, msg.sender);
     }
 
@@ -151,8 +217,18 @@ contract BIPMembershipController is IBIPMembershipController {
         emit Unpaused(msg.sender);
     }
 
+    /// @notice Starts a two-step ownership transfer. The pending owner must accept explicitly.
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
-        owner = newOwner;
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner || msg.sender == address(0)) revert NotPendingOwner();
+        address previousOwner = owner;
+        owner = msg.sender;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(previousOwner, msg.sender);
     }
 }
