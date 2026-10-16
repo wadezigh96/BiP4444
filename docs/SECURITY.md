@@ -1,7 +1,7 @@
 # BIP4444 Security Requirements
 
-**Status:** Planning / pre-implementation  
-**Last updated:** 2026-10-16  
+**Status:** Pre-audit implementation; not production-ready  
+**Last updated:** 2026-10-17  
 **Policy:** Audit first. Do not deploy contracts, enable production payments, or modify mainnet state until all gates in `docs/AUDIT_GATES.md` pass.
 
 ## Core security principles
@@ -18,9 +18,11 @@
    - Hard limit of 4,444 unique active BIP memberships.  
    - Frontend or server-side counters are not sufficient.
 
-4. **Payments require verified settlement**  
+4. **Payments require verified settlement and explicit owner consent**  
    - Access or membership must not be granted merely because a client claims it paid.  
-   - See `docs/X402_REQUIREMENTS.md`.
+   - The public free `register(uint256)` method has been removed; the on-chain registration path requires an allowlisted relayer and an EIP-712 signature from the current ERC-8004 owner.  
+   - The contract cannot independently verify B402 settlement, so the backend must fail closed and keep durable payment/registration records.  
+   - See `docs/API_REGISTER.md` and `docs/X402_REQUIREMENTS.md`.
 
 5. **Alerts are authenticated**  
    - Signed/authenticated alerts with documented reporter authorization and key rotation.  
@@ -34,7 +36,7 @@
 
 | Threat | Mitigation direction |
 |--------|----------------------|
-| Unauthorized membership | On-chain registry + ownership check against ERC-8004 |
+| Unauthorized membership | EIP-712 owner consent bound to agentId/payment-operation hash/role, relayer allowlist, and current ERC-8004 owner check |
 | Cap bypass / duplicate registration | Storage invariants + unique agentId mapping |
 | Payment replay / wrong chain / wrong asset | Full x402 settlement verification + negative tests |
 | Fake or phishing alerts | Signed alerts, trusted reporter list, key rotation, official domain only |
