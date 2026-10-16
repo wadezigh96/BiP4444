@@ -19,6 +19,8 @@ contract BIPMembershipRelayerTest is Test {
     bytes32 internal constant PAYMENT_HASH = keccak256("payment-1");
     bytes32 internal constant ROLE_HASH = keccak256("research");
 
+    event MembershipRegistered(uint256 indexed agentId, uint256 indexed membershipId, address indexed registrant);
+
     function setUp() public {
         alice = vm.addr(ALICE_PK);
         identity = new MockERC8004Identity();
@@ -59,7 +61,7 @@ contract BIPMembershipRelayerTest is Test {
 
         vm.prank(relayer);
         vm.expectEmit(true, true, true, true);
-        emit BIPMembershipController.MembershipRegistered(AGENT_ID, 1, relayer);
+        emit MembershipRegistered(AGENT_ID, 1, relayer);
         controller.registerFor(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline, signature);
 
         assertTrue(controller.isMember(AGENT_ID));
