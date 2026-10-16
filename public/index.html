@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BIP4444 — Binance Intelligence Passport</title>
+  <meta name="description" content="Security-focused identity and Alert Shield layer for AI agents on BNB Smart Chain." />
+  <style>
+    :root {
+      --bg: #0b0f14; --card: #121a22; --text: #e8eef4; --muted: #8b9aab;
+      --accent: #f0b90b; --ok: #3dd68c; --border: #1e2a36;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: radial-gradient(1200px 600px at 20% -10%, #1a2740 0%, var(--bg) 55%);
+      color: var(--text); line-height: 1.5; min-height: 100vh;
+    }
+    main { max-width: 720px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.35rem; }
+    .badge {
+      display: inline-block; font-size: 0.75rem; font-weight: 600; color: #1a1400;
+      background: var(--accent); padding: 0.2rem 0.55rem; border-radius: 999px; margin-bottom: 1rem;
+    }
+    .lead { color: var(--muted); margin: 0 0 1.75rem; }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1.1rem 1.25rem; margin-bottom: 1rem;
+    }
+    .card h2 {
+      font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin: 0 0 0.65rem;
+    }
+    ul { margin: 0; padding-left: 1.1rem; }
+    li { margin: 0.35rem 0; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85em; word-break: break-all; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .status { color: var(--ok); font-weight: 600; }
+    footer { margin-top: 2rem; font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="badge">Specification · security planning</span>
+    <h1>BIP4444</h1>
+    <p class="lead">Binance Intelligence Passport — identity + Alert Shield for AI agents on <strong>BNB Smart Chain</strong>.</p>
+    <div class="card">
+      <h2>Official host</h2>
+      <p class="status">HTTPS · bips4444.vercel.app</p>
+      <p class="mono">Alert keys: <a href="/.well-known/bip-alert-keys.json">/.well-known/bip-alert-keys.json</a></p>
+    </div>
+    <div class="card">
+      <h2>Locked design</h2>
+      <ul>
+        <li>Cap <strong>4,444</strong> · ERC-8004 identity</li>
+        <li>x402 <strong>B402</strong> · <strong>5 USDT</strong></li>
+        <li>payTo Safe <span class="mono">0xFf265912c76342c8469cE18aB9DF0B2f37d9373c</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Docs</h2>
+      <ul>
+        <li><a href="https://github.com/wadezigh96/BiP4444">GitHub</a></li>
+        <li><a href="https://github.com/wadezigh96/BiP4444/blob/main/docs/AUDIT_GATES.md">Audit gates</a></li>
+      </ul>
+    </div>
+    <footer>Security-first. Do not share seeds or API secrets on this page.</footer>
+  </main>
+</body>
+</html>
