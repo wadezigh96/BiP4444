@@ -10,13 +10,19 @@ contract BIPMembershipControllerTest is Test {
     MockERC8004Identity internal identity;
 
     address internal admin = address(0xA11CE);
-    address internal alice = address(0xA11CE1);
-    address internal bob = address(0xB0B);
-    address internal charlie = address(0xC0);
+    address internal alice;
+    address internal bob;
+    address internal charlie;
+    address internal relayer = address(0xB402);
 
+    uint256 internal constant ALICE_PK = 0xA11CE1;
+    uint256 internal constant BOB_PK = 0xB0B;
+    uint256 internal constant CHARLIE_PK = 0xC0;
+    uint256 internal constant FILLER_PK = 0xF111E;
     uint256 internal constant AGENT_ALICE = 1001;
     uint256 internal constant AGENT_BOB = 1002;
     uint256 internal constant AGENT_CHARLIE = 1003;
+    bytes32 internal constant ROLE_HASH = keccak256("test-role");
 
     event MembershipRegistered(uint256 indexed agentId, uint256 indexed membershipId, address indexed registrant);
     event MembershipRevoked(uint256 indexed agentId, uint256 indexed membershipId, address indexed by);
@@ -24,20 +30,46 @@ contract BIPMembershipControllerTest is Test {
     event Unpaused(address account);
 
     function setUp() public {
-        identity = new MockERC8004Identity();
+        alice = vm.addr(ALICE_PK);
+        bob = vm.addr(BOB_PK);
+        charlie = vm.addr(CHARLIE_PK);
 
+        identity = new MockERC8004Identity();
         vm.prank(admin);
         controller = new BIPMembershipController(address(identity));
 
-        // Register mock agents
         identity.setOwner(AGENT_ALICE, alice);
         identity.setOwner(AGENT_BOB, bob);
         identity.setOwner(AGENT_CHARLIE, charlie);
+
+        vm.prank(admin);
+        controller.setRelayer(relayer, true);
     }
 
-    // -------------------------------------------------------------------------
-    // Constructor / views
-    // -------------------------------------------------------------------------
+    function _signature(
+        uint256 agentId,
+        uint256 signingKey,
+        address expectedOwner,
+        bytes32 paymentHash,
+        bytes32 roleHash,
+        uint256 deadline
+    ) internal view returns (bytes memory) {
+        bytes32 digest = controller.authorizationDigest(
+            agentId, paymentHash, roleHash, controller.ownerNonces(expectedOwner), deadline
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signingKey, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    function _registerAgent(uint256 agentId, uint256 ownerKey, bytes32 paymentHash) internal {
+        address agentOwner = vm.addr(ownerKey);
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(
+            agentId, ownerKey, agentOwner, paymentHash, ROLE_HASH, deadline
+        );
+        vm.prank(relayer);
+        controller.registerFor(agentId, paymentHash, ROLE_HASH, deadline, signature);
+    }
 
     function test_MaxMembersIs4444() public view {
         assertEq(controller.MAX_MEMBERS(), 4444);
@@ -54,18 +86,28 @@ contract BIPMembershipControllerTest is Test {
         new BIPMembershipController(address(0));
     }
 
-    // -------------------------------------------------------------------------
-    // Registration — happy path
-    // -------------------------------------------------------------------------
+    function test_FreeRegisterSelectorIsNotAvailable() public {
+        (bool success,) = address(controller).call(abi.encodeWithSignature("register(uint256)", AGENT_ALICE));
+        assertFalse(success);
+        assertFalse(controller.isMember(AGENT_ALICE));
+    }
 
-    function test_Register_Success() public {
-        vm.prank(alice);
+    function test_RegisterFor_Success() public {
+        bytes32 paymentHash = keccak256("alice-payment-1");
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(
+            AGENT_ALICE, ALICE_PK, alice, paymentHash, ROLE_HASH, deadline
+        );
+
+        vm.prank(relayer);
         vm.expectEmit(true, true, true, true);
-        emit MembershipRegistered(AGENT_ALICE, 1, alice);
-        controller.register(AGENT_ALICE);
+        emit MembershipRegistered(AGENT_ALICE, 1, relayer);
+        controller.registerFor(AGENT_ALICE, paymentHash, ROLE_HASH, deadline, signature);
 
         assertTrue(controller.isMember(AGENT_ALICE));
         assertEq(controller.activeMemberCount(), 1);
+        assertTrue(controller.usedPaymentIds(paymentHash));
+        assertEq(controller.ownerNonces(alice), 1);
 
         (uint256 membershipId, address registeredBy, uint64 registeredAt, bool active) =
             controller.membershipOf(AGENT_ALICE);
@@ -75,11 +117,9 @@ contract BIPMembershipControllerTest is Test {
         assertGt(registeredAt, 0);
     }
 
-    function test_Register_MultipleDistinctAgents() public {
-        vm.prank(alice);
-        controller.register(AGENT_ALICE);
-        vm.prank(bob);
-        controller.register(AGENT_BOB);
+    function test_RegisterFor_MultipleDistinctAgents() public {
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("alice-payment"));
+        _registerAgent(AGENT_BOB, BOB_PK, keccak256("bob-payment"));
 
         assertTrue(controller.isMember(AGENT_ALICE));
         assertTrue(controller.isMember(AGENT_BOB));
@@ -91,81 +131,86 @@ contract BIPMembershipControllerTest is Test {
         assertEq(idBob, 2);
     }
 
-    // -------------------------------------------------------------------------
-    // Registration — negative cases
-    // -------------------------------------------------------------------------
-
-    function test_Register_RevertsOnZeroAgentId() public {
-        vm.prank(alice);
+    function test_RegisterFor_RevertsOnZeroAgentId() public {
+        bytes32 paymentHash = keccak256("zero-agent");
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(0, ALICE_PK, alice, paymentHash, ROLE_HASH, deadline);
+        vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.ZeroAgentId.selector);
-        controller.register(0);
+        controller.registerFor(0, paymentHash, ROLE_HASH, deadline, signature);
     }
 
-    function test_Register_RevertsWhenNotAgentOwner() public {
-        // bob tries to register alice's agent
-        vm.prank(bob);
-        vm.expectRevert(BIPMembershipController.NotAgentOwner.selector);
-        controller.register(AGENT_ALICE);
+    function test_RegisterFor_RevertsWhenSignatureIsNotFromIdentityOwner() public {
+        bytes32 paymentHash = keccak256("wrong-signer");
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(
+            AGENT_ALICE, BOB_PK, alice, paymentHash, ROLE_HASH, deadline
+        );
+        vm.prank(relayer);
+        vm.expectRevert(BIPMembershipController.InvalidSignature.selector);
+        controller.registerFor(AGENT_ALICE, paymentHash, ROLE_HASH, deadline, signature);
     }
 
-    function test_Register_RevertsOnDuplicate() public {
-        vm.prank(alice);
-        controller.register(AGENT_ALICE);
-
-        vm.prank(alice);
+    function test_RegisterFor_RevertsOnDuplicateActiveMembership() public {
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("alice-first-payment"));
+        bytes32 anotherPayment = keccak256("alice-second-payment");
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(
+            AGENT_ALICE, ALICE_PK, alice, anotherPayment, ROLE_HASH, deadline
+        );
+        vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.AlreadyMember.selector);
-        controller.register(AGENT_ALICE);
+        controller.registerFor(AGENT_ALICE, anotherPayment, ROLE_HASH, deadline, signature);
     }
 
-    function test_Register_RevertsWhenPaused() public {
+    function test_RegisterFor_RevertsWhenPaused() public {
         vm.prank(admin);
         controller.pause();
 
-        vm.prank(alice);
+        bytes32 paymentHash = keccak256("paused-payment");
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(
+            AGENT_ALICE, ALICE_PK, alice, paymentHash, ROLE_HASH, deadline
+        );
+        vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.PausedError.selector);
-        controller.register(AGENT_ALICE);
+        controller.registerFor(AGENT_ALICE, paymentHash, ROLE_HASH, deadline, signature);
     }
 
-    function test_Register_RevertsWhenAgentDoesNotExist() public {
-        // agentId 9999 never set on mock → ownerOf reverts
-        vm.prank(alice);
+    function test_RegisterFor_RevertsWhenAgentDoesNotExist() public {
+        bytes32 paymentHash = keccak256("missing-agent");
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(9999, ALICE_PK, address(0), paymentHash, ROLE_HASH, deadline);
+        vm.prank(relayer);
         vm.expectRevert(MockERC8004Identity.NonexistentAgent.selector);
-        controller.register(9999);
+        controller.registerFor(9999, paymentHash, ROLE_HASH, deadline, signature);
     }
 
-    // -------------------------------------------------------------------------
-    // Cap enforcement (4,444)
-    // -------------------------------------------------------------------------
-
-    /// @dev Fills the registry to exactly MAX_MEMBERS using sequential agentIds.
-    ///      Uses a single owner for speed; still exercises the on-chain counter.
     function test_Cap_ReachedAt4444() public {
         uint256 max = controller.MAX_MEMBERS();
-        assertEq(max, 4444);
-
-        // Use a dedicated owner for bulk registration
-        address filler = address(0xF111E);
+        address filler = vm.addr(FILLER_PK);
 
         for (uint256 i = 1; i <= max; i++) {
             identity.setOwner(i, filler);
-            vm.prank(filler);
-            controller.register(i);
+            _registerAgent(i, FILLER_PK, keccak256(abi.encode("cap-payment", i)));
         }
 
         assertEq(controller.activeMemberCount(), max);
 
-        // 4445th must fail
         uint256 overflowId = max + 1;
         identity.setOwner(overflowId, filler);
-        vm.prank(filler);
+        bytes32 paymentHash = keccak256("cap-overflow-payment");
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(
+            overflowId, FILLER_PK, filler, paymentHash, ROLE_HASH, deadline
+        );
+        vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.CapReached.selector);
-        controller.register(overflowId);
+        controller.registerFor(overflowId, paymentHash, ROLE_HASH, deadline, signature);
     }
 
     function test_Cap_RevokeFreesSlot() public {
-        // Register one, revoke, register again with different agent under same owner path
-        vm.prank(alice);
-        controller.register(AGENT_ALICE);
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("revoke-first-payment"));
         assertEq(controller.activeMemberCount(), 1);
 
         vm.prank(admin);
@@ -173,25 +218,15 @@ contract BIPMembershipControllerTest is Test {
         assertEq(controller.activeMemberCount(), 0);
         assertFalse(controller.isMember(AGENT_ALICE));
 
-        // Same agent can re-register after revoke (current skeleton behaviour)
-        vm.prank(alice);
-        controller.register(AGENT_ALICE);
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("revoke-second-payment"));
         assertTrue(controller.isMember(AGENT_ALICE));
         assertEq(controller.activeMemberCount(), 1);
-
         (uint256 membershipId,,,) = controller.membershipOf(AGENT_ALICE);
-        // membershipId advances (2), even though agent was re-registered
         assertEq(membershipId, 2);
     }
 
-    // -------------------------------------------------------------------------
-    // Revoke
-    // -------------------------------------------------------------------------
-
     function test_Revoke_OnlyOwner() public {
-        vm.prank(alice);
-        controller.register(AGENT_ALICE);
-
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("revoke-owner-payment"));
         vm.prank(alice);
         vm.expectRevert(BIPMembershipController.NotOwner.selector);
         controller.revoke(AGENT_ALICE);
@@ -200,7 +235,6 @@ contract BIPMembershipControllerTest is Test {
         vm.expectEmit(true, true, true, true);
         emit MembershipRevoked(AGENT_ALICE, 1, admin);
         controller.revoke(AGENT_ALICE);
-
         assertFalse(controller.isMember(AGENT_ALICE));
         assertEq(controller.activeMemberCount(), 0);
     }
@@ -212,20 +246,13 @@ contract BIPMembershipControllerTest is Test {
     }
 
     function test_Revoke_RevertsWhenPaused() public {
-        vm.prank(alice);
-        controller.register(AGENT_ALICE);
-
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("revoke-paused-payment"));
         vm.prank(admin);
         controller.pause();
-
         vm.prank(admin);
         vm.expectRevert(BIPMembershipController.PausedError.selector);
         controller.revoke(AGENT_ALICE);
     }
-
-    // -------------------------------------------------------------------------
-    // Pause / unpause
-    // -------------------------------------------------------------------------
 
     function test_Pause_OnlyOwner() public {
         vm.prank(alice);
@@ -242,7 +269,6 @@ contract BIPMembershipControllerTest is Test {
     function test_Unpause_OnlyOwner() public {
         vm.prank(admin);
         controller.pause();
-
         vm.prank(alice);
         vm.expectRevert(BIPMembershipController.NotOwner.selector);
         controller.unpause();
@@ -257,7 +283,6 @@ contract BIPMembershipControllerTest is Test {
     function test_Pause_RevertsIfAlreadyPaused() public {
         vm.prank(admin);
         controller.pause();
-
         vm.prank(admin);
         vm.expectRevert(BIPMembershipController.PausedError.selector);
         controller.pause();
@@ -269,25 +294,32 @@ contract BIPMembershipControllerTest is Test {
         controller.unpause();
     }
 
-    // -------------------------------------------------------------------------
-    // Ownership transfer (admin)
-    // -------------------------------------------------------------------------
-
-    function test_TransferOwnership() public {
+    function test_TransferOwnership_RequiresAcceptance() public {
         address newAdmin = address(0xDEAD);
         vm.prank(admin);
         controller.transferOwnership(newAdmin);
-        assertEq(controller.owner(), newAdmin);
+        assertEq(controller.owner(), admin);
+        assertEq(controller.pendingOwner(), newAdmin);
 
-        // old admin can no longer pause
+        vm.prank(newAdmin);
+        controller.acceptOwnership();
+        assertEq(controller.owner(), newAdmin);
+        assertEq(controller.pendingOwner(), address(0));
+
         vm.prank(admin);
         vm.expectRevert(BIPMembershipController.NotOwner.selector);
         controller.pause();
-
-        // new admin can
         vm.prank(newAdmin);
         controller.pause();
         assertTrue(controller.paused());
+    }
+
+    function test_AcceptOwnership_RevertsForNonPendingOwner() public {
+        vm.prank(admin);
+        controller.transferOwnership(address(0xDEAD));
+        vm.prank(alice);
+        vm.expectRevert(BIPMembershipController.NotPendingOwner.selector);
+        controller.acceptOwnership();
     }
 
     function test_TransferOwnership_RevertsOnZero() public {
@@ -296,24 +328,20 @@ contract BIPMembershipControllerTest is Test {
         controller.transferOwnership(address(0));
     }
 
-    // -------------------------------------------------------------------------
-    // Fuzz: register only when caller is agent owner
-    // -------------------------------------------------------------------------
-
-    function testFuzz_Register_OnlyAgentOwner(address caller, uint256 agentId) public {
-        vm.assume(caller != address(0));
+    function testFuzz_RegisterForRejectsSignatureFromWrongOwner(uint256 wrongKey, uint256 agentId) public {
+        vm.assume(wrongKey > 0);
+        vm.assume(wrongKey < 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141);
+        vm.assume(wrongKey != ALICE_PK);
         vm.assume(agentId != 0);
-        // Avoid collision with agents already set in setUp if caller differs
-        identity.setOwner(agentId, alice);
 
-        if (caller == alice) {
-            vm.prank(caller);
-            controller.register(agentId);
-            assertTrue(controller.isMember(agentId));
-        } else {
-            vm.prank(caller);
-            vm.expectRevert(BIPMembershipController.NotAgentOwner.selector);
-            controller.register(agentId);
-        }
+        identity.setOwner(agentId, alice);
+        bytes32 paymentHash = keccak256(abi.encode("fuzz-payment", agentId));
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _signature(
+            agentId, wrongKey, alice, paymentHash, ROLE_HASH, deadline
+        );
+        vm.prank(relayer);
+        vm.expectRevert(BIPMembershipController.InvalidSignature.selector);
+        controller.registerFor(agentId, paymentHash, ROLE_HASH, deadline, signature);
     }
 }

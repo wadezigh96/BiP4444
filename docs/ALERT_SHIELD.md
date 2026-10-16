@@ -1,7 +1,7 @@
 # BIP4444 Alert Shield Specification
 
 **Status:** Design (pre-implementation)  
-**Last updated:** 2026-10-16  
+**Last updated:** 2026-10-17  
 **Official domain (locked):** `bips4444.vercel.app`  
 **Key directory URL:** `https://bips4444.vercel.app/.well-known/bip-alert-keys.json`
 
@@ -22,7 +22,7 @@ Alert Shield is a **detection and response aid** for BIP members. It publishes s
 | Key directory | `https://bips4444.vercel.app/.well-known/bip-alert-keys.json` |
 | Allowlist | Only this host (and future custom domain if added) in alert `links` |
 
-**Note (2026-10-16):** Root URL currently returns Vercel `NOT_FOUND` until a web app is deployed to this project. After deploy, place `public/.well-known/bip-alert-keys.json` so the key directory returns HTTP 200.
+**Repository status (2026-10-17):** A static landing page exists at `public/index.html`, and a placeholder public-key directory exists at `public/.well-known/bip-alert-keys.json`. This directory currently has an empty `keys` array, so no alert publisher key is trusted yet. The production deployment's HTTP status was not independently verified in this audit; verify both URLs after deployment before marking the runtime gate complete.
 
 TLS private keys stay on Vercel — never in git or alert payloads.
 

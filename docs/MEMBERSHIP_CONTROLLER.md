@@ -1,7 +1,7 @@
 # BIP4444 Membership Controller Specification
 
-**Status:** Design / pre-implementation  
-**Last updated:** 2026-10-16  
+**Status:** Pre-audit implementation; not production-ready  
+**Last updated:** 2026-10-17  
 **Related:** ERC-8004 Identity Registry on BSC; x402 payment design
 
 ## Goal
@@ -35,7 +35,7 @@ See `docs/X402_REQUIREMENTS.md` §0:
 | Revocation | Admin (skeleton) | Final policy still open |
 | Transfer of membership | Not independently transferable | Follows ERC-8004 identity |
 | Role | Off-chain ledger in v1 | Optional on-chain field later |
-| Relayer register | `registerFor` + `RELAYER_ROLE` | Required for path A; not in current skeleton |
+| Relayer register | `registerFor` with EIP-712 owner consent + relayer allowlist | Implemented in the pre-audit branch; CI and independent review still required |
 | Admin model | Multisig / role-based | Emergency pause recommended |
 
 ## Required on-chain invariants
@@ -48,20 +48,17 @@ See `docs/X402_REQUIREMENTS.md` §0:
 
 ## Interface evolution (path A)
 
-Current skeleton: `register(agentId)` only callable by ERC-8004 owner.
+The prior public `register(agentId)` method has been removed because it allowed free registration and bypassed the required 5 USDT payment gate. Registration is now only through `registerFor(agentId, paymentIdHash, roleHash, deadline, ownerSignature)`.
 
-**Target addition (before mainnet path A):**
+- `registerFor` is relayer-allowlisted and requires a valid EIP-712 signature from the current ERC-8004 owner.
+- The typed authorization binds `agentId`, a server-generated payment-operation hash, canonical role hash, per-owner nonce, deadline, chain ID, and controller address.
+- Signatures expire and may be valid for at most 24 hours; payment hashes cannot be consumed twice, including after revocation.
+- Enforces pause, active membership cap, and duplicate-active-member checks.
+- Emits `MembershipRegistered` with the relayer as operator and stores the identity owner as `registeredBy`.
+- **Payment is not verified on-chain.** The backend must verify B402 settlement, bind it to the signed operation, use a durable ledger/idempotency constraints, and reconcile refunds. A compromised relayer can still lie about settlement; this remains a critical trust boundary.
+- Admin ownership transfer now uses a two-step pending-owner acceptance pattern. Production admin and relayer key custody still require independent review.
 
-```solidity
-function registerFor(uint256 agentId) external onlyRelayer whenNotPaused;
-```
-
-- Still requires agent to exist (`ownerOf` does not revert).
-- Still enforces cap + no duplicate active membership.
-- Emits `MembershipRegistered` with relayer as operator; store `registeredBy` as owner or relayer per final policy.
-- **Payment is not verified on-chain in v1** — trust reduced by: relayer key hygiene, ledger audit, refund policy, rate limits.
-
-Optional later: on-chain role `string` or `bytes32` role tag.
+This is a pre-audit implementation; successful CI is required before treating the code as test-verified.
 
 ## Open questions (remaining)
 
