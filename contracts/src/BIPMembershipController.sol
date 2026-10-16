@@ -106,14 +106,6 @@ contract BIPMembershipController is IBIPMembershipController {
         return (m.membershipId, m.registeredBy, m.registeredAt, m.active);
     }
 
-    /// @notice Self-service registration; caller must own the ERC-8004 identity.
-    function register(uint256 agentId) external override whenNotPaused {
-        if (agentId == 0) revert ZeroAgentId();
-        address agentOwner = identityRegistry.ownerOf(agentId);
-        if (agentOwner != msg.sender) revert NotAgentOwner();
-        _register(agentId, agentOwner, msg.sender);
-    }
-
     /// @notice Relayer registration with owner consent bound to this chain, contract, payment and role.
     /// @dev The backend must call only after B402 settlement is confirmed. The contract cannot verify
     ///      off-chain payment; owner signature prevents the relayer from silently enrolling an agent.
