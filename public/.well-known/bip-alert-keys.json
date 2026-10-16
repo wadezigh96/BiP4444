@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-16T00:00:00Z",
+  "keys": [],
+  "domainAllowlist": ["bips4444.vercel.app"],
+  "note": "Placeholder. Add Ed25519 public keys after keygen. Deploy this file with the web app so https://bips4444.vercel.app/.well-known/bip-alert-keys.json returns 200."
+}
