@@ -273,21 +273,35 @@ contract BIPMembershipControllerTest is Test {
     // Ownership transfer (admin)
     // -------------------------------------------------------------------------
 
-    function test_TransferOwnership() public {
+    function test_TransferOwnership_RequiresAcceptance() public {
         address newAdmin = address(0xDEAD);
         vm.prank(admin);
         controller.transferOwnership(newAdmin);
-        assertEq(controller.owner(), newAdmin);
+        assertEq(controller.owner(), admin);
+        assertEq(controller.pendingOwner(), newAdmin);
 
-        // old admin can no longer pause
+        // Pending owner explicitly accepts.
+        vm.prank(newAdmin);
+        controller.acceptOwnership();
+        assertEq(controller.owner(), newAdmin);
+        assertEq(controller.pendingOwner(), address(0));
+
         vm.prank(admin);
         vm.expectRevert(BIPMembershipController.NotOwner.selector);
         controller.pause();
 
-        // new admin can
         vm.prank(newAdmin);
         controller.pause();
         assertTrue(controller.paused());
+    }
+
+    function test_AcceptOwnership_RevertsForNonPendingOwner() public {
+        vm.prank(admin);
+        controller.transferOwnership(address(0xDEAD));
+
+        vm.prank(alice);
+        vm.expectRevert(BIPMembershipController.NotPendingOwner.selector);
+        controller.acceptOwnership();
     }
 
     function test_TransferOwnership_RevertsOnZero() public {
