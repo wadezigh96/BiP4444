@@ -3,8 +3,8 @@
 **Status:** PASS for the current branch's Solidity unit-test suite (not an independent security audit).  
 **Repository:** `wadezigh96/BiP4444`  
 **Branch:** `feat/api-register-spec`  
-**Commit tested:** `7c03a84accbf38591e7e69346fd644ef9066d1d9`  
-**Workflow run:** https://github.com/wadezigh96/BiP4444/actions/runs/38957210557  
+**Commit tested:** `be4710a0afb83230fc77e226b9c2e9ce51f3413a`  
+**Workflow run:** https://github.com/wadezigh96/BiP4444/actions/runs/38957324997  
 **Workflow:** `.github/workflows/forge-test.yml`
 
 ## Environment
