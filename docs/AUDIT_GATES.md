@@ -6,7 +6,7 @@
 ## Gates
 
 - [ ] **Repository and dependency review**  
-  Current state: specification, planning docs, skeleton contracts, and Foundry tests only. Re-run when production dependencies and full implementation are added.
+  Re-run when production dependencies and full implementation are added.
 
 - [x] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
@@ -15,31 +15,30 @@
   Evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md`
 
 - [ ] **x402 facilitator and settlement verification**  
-  Design locked: B402, 5 USDT, path A, refund yes, identity+role — `docs/X402_REQUIREMENTS.md`.  
-  Remaining: B402 adapter, relayer/`registerFor`, refund worker, negative tests, evidence.
+  Design locked (B402, 5 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Runtime evidence TBD.
 
 - [ ] **Alert authenticity, reporter authorization, and key-rotation tests**  
-  See `docs/ALERT_SHIELD.md`.
+  Design: `docs/ALERT_SHIELD.md`. Remaining: implement feed, keys, §11 tests, evidence.
 
 - [ ] **Authentication, privacy, rate-limit, and phishing-resistance review**  
-  Covers endpoints, QR codes, and public records.
+  Partially addressed in Alert Shield + x402 docs; formal review still open.
 
 - [ ] **Unit, integration, and negative security tests**  
-  Unit membership tests done; x402 and alert tests still pending.
+  Membership unit tests done; x402 + alert tests pending.
 
-- [ ] **Independent review of contracts and deployment configuration**  
-  External or second-pair review of final contracts and deploy scripts.
+- [ ] **Independent review of contracts and deployment configuration**
 
-- [ ] **Explicit release approval before mainnet deployment**  
-  Written sign-off that all above gates are complete.
+- [ ] **Explicit release approval before mainnet deployment**
 
 ## Evidence location
 
 | Gate | Evidence |
 |------|----------|
-| Membership cap / duplicate | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
+| Membership tests | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
-| x402 | Design locked in `docs/X402_REQUIREMENTS.md`; runtime evidence TBD |
+| payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
+| x402 | Design `docs/X402_REQUIREMENTS.md` |
+| Alert Shield | Design `docs/ALERT_SHIELD.md` |
 
 ## Security-first rule
 
