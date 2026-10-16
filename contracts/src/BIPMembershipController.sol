@@ -9,6 +9,7 @@ import {IERC8004Identity} from "../interfaces/IERC8004Identity.sol";
 /// @dev Pre-audit implementation. Never deploy to mainnet until all release gates pass.
 contract BIPMembershipController is IBIPMembershipController {
     uint256 private constant _MAX_MEMBERS = 4444;
+    uint256 public constant MAX_AUTHORIZATION_LIFETIME = 1 days;
     uint256 private constant _SECP256K1N_HALF =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
@@ -55,6 +56,7 @@ contract BIPMembershipController is IBIPMembershipController {
     error InvalidSignature();
     error InvalidAuthorization();
     error SignatureExpired();
+    error SignatureLifetimeTooLong();
     error PaymentIdAlreadyUsed();
 
     event OwnershipTransferStarted(address indexed owner, address indexed pendingOwner);
@@ -125,6 +127,7 @@ contract BIPMembershipController is IBIPMembershipController {
         if (agentId == 0) revert ZeroAgentId();
         if (paymentIdHash == bytes32(0) || roleHash == bytes32(0)) revert InvalidAuthorization();
         if (deadline < block.timestamp) revert SignatureExpired();
+        if (deadline > block.timestamp + MAX_AUTHORIZATION_LIFETIME) revert SignatureLifetimeTooLong();
         if (usedPaymentIds[paymentIdHash]) revert PaymentIdAlreadyUsed();
 
         address agentOwner = identityRegistry.ownerOf(agentId);
