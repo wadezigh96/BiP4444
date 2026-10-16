@@ -11,8 +11,8 @@
 - [x] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
 
-- [ ] **Membership-cap and duplicate-registration tests**  
-  Historical evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` records the earlier skeleton suite. The latest GitHub Actions run failed before compiling because `forge-std/Test.sol` was missing; do not treat that historical result as validation of the current branch. A dependency-install step has been added and the updated suite must pass CI.
+- [x] **Current branch Foundry unit suite**  
+  Evidence: `docs/evidence/FOUNDRY_CI_2026-10-17.md`. GitHub Actions run passed 38 tests (15 relayer tests + 23 controller tests, including the 4,444 cap and 256 fuzz runs). This validates the tested commit's unit suite only; it is not an independent audit or payment/backend integration test.
 
 - [ ] **Membership API implementation and persistent ledger**  
   API contract drafted in `docs/API_REGISTER.md`. No production route, database-backed ledger, or runtime evidence is claimed yet.
@@ -32,8 +32,8 @@
 - [ ] **Unit, integration, and negative security tests**  
   Existing membership skeleton tests are recorded; relayer, x402, API, and alert tests pending.
 
-- [ ] **CI reproducibility**  
-  `.github/workflows/forge-test.yml` now installs pinned `forge-std` v1.9.7 explicitly. Gate remains open until a new workflow run succeeds, the full test output is reviewed, and the result is recorded as evidence.
+- [x] **Foundry CI dependency and reproducibility check**  
+  `.github/workflows/forge-test.yml` installs pinned `forge-std` v1.9.7. Successful run and evidence: `docs/evidence/FOUNDRY_CI_2026-10-17.md`. Keep this gate open again if the toolchain, dependencies, or workflow changes.
 
 - [ ] **Independent review of contracts and deployment configuration**
 
@@ -43,7 +43,8 @@
 
 | Gate | Evidence |
 |------|----------|
-| Membership tests | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
+| Historical membership tests | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
+| Current Foundry CI | `docs/evidence/FOUNDRY_CI_2026-10-17.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 | payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
 | x402 | Design `docs/X402_REQUIREMENTS.md`; API contract `docs/API_REGISTER.md` |
