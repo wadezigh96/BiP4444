@@ -15,107 +15,98 @@
 | **Price** | **5 USDT** exact (`scheme: exact`) |
 | **Asset** | Binance-Peg **USDT** on BSC: `0x55d398326f99059fF775485246999027B3197955` (18 decimals) |
 | **Atomic amount** | `5000000000000000000` (5 × 10^18) |
-| **`payTo` address** | **`0x6783714167eC1c3519455AfCf2c93f6074624575`** |
-| **`payTo` custody target** | **Multisig** (Safe or equivalent). See verification note below. |
+| **`payTo` address** | **`0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`** |
+| **`payTo` type** | **Safe multisig** (see verification) |
 | **Register path** | **A — Backend relayer** after successful settle |
 | **Identity** | ERC-8004 `agentId` + live `ownerOf(agentId)` check |
 | **Role** | Client supplies a **role** string at registration |
 | **Refund if settle OK but register fails** | **Yes** — see §7 |
 
-Still open: B402 API credentials (ops); relayer key; whether `role` is on-chain later.
+Still open: B402 API credentials; relayer key; on-chain `role` later.
 
-### payTo verification (BSC mainnet, 2026-10-16)
+### payTo — Safe verification (BSC mainnet, 2026-10-16)
 
-| Check | Result |
+| Field | Value |
 |-------|--------|
-| Address | `0x6783714167eC1c3519455AfCf2c93f6074624575` |
+| Address | `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c` |
 | Chain ID | 56 |
-| Block | ~127882362 |
-| Contract code | **None (EOA)** at verification time |
-| BNB / USDT balance | 0 / 0 |
+| Block | ~127884052 |
+| Contract code | **Yes** (proxy ~123 bytes) |
+| Safe VERSION | **1.5.0** |
+| Threshold | **2** |
+| Owners (2) | `0xfCeAfeC082F9e8b17CDb51f33c3d5c9759A25E03` |
+| | `0x6783714167eC1c3519455AfCf2c93f6074624575` |
+| Policy | **2-of-2** |
 
-**Important:** Policy target remains **multisig**. At lock time this address is an **EOA** (no bytecode). Before accepting real membership payments:
+Previous interim EOA `0x6783714167eC1c3519455AfCf2c93f6074624575` is now an **owner** of this Safe (not the fee receiver).
 
-1. Prefer deploying a **Safe (or equivalent multisig)** and updating `BIP_PAY_TO`, **or**
-2. If this EOA is intentional interim, document key custody, export risk, and migration plan to multisig.
+Config: `BIP_PAY_TO=0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`
 
-Do not use the relayer key as `payTo`. Clients never override `payTo`.
+Explorer: https://bscscan.com/address/0xFf265912c76342c8469cE18aB9DF0B2f37d9373c  
+Evidence: `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md`
 
-Config: `BIP_PAY_TO=0x6783714167eC1c3519455AfCf2c93f6074624575`
+Relayer key must **not** be required as the only means to move funds; threshold 2 keeps dual control.
 
 ---
 
 ## 1. Goal
 
-Use **x402 (v2)** + **B402** so an agent operator can pay **5 USDT** for **BIP membership** bound to an ERC-8004 identity and a declared **role**, without BIP holding private keys.
+Use **x402 (v2)** + **B402** so an agent operator can pay **5 USDT** to the **Safe** `payTo` for BIP membership bound to ERC-8004 identity + **role**, without BIP holding user private keys.
 
-**Hard rule:** Membership is granted only after B402 verify + settle succeed and relayer registration completes (or refund runs).
+**Hard rule:** Membership only after B402 verify + settle and relayer registration (or refund).
 
 ---
 
-## 2. Protocol flow (B402 + path A)
+## 2. Protocol flow
 
 ```
-Client → BIP API → 402 (5 USDT → payTo 0x6783…4575)
-      → PAYMENT-SIGNATURE → B402 verify/settle → USDT to payTo
-      → relayer registerFor(agentId) → 200 membership + role + identity
+Client → 402 (5 USDT → Safe 0xFf2659…373c) → B402 settle → relayer registerFor → 200
 ```
 
-Headers: `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE` (x402 v2).
+Headers: `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`.
 
 ---
 
-## 3. Registration resource (identity + role)
+## 3. Registration (`agentId` + `role`)
 
-```json
-{ "agentId": "1001", "role": "operator" }
-```
-
-- `agentId`: ERC-8004 on proxy `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
-- `role`: required, max 64 chars
-- 402 binds: network `eip155:56`, USDT, amount `5000000000000000000`, **payTo `0x6783714167eC1c3519455AfCf2c93f6074624575`**
+402 binds: `eip155:56`, USDT, `5000000000000000000`, **payTo `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`**, resource metadata with agentId + role.
 
 ---
 
-## 4. B402 facilitator
+## 4. B402
 
-Backend-only secrets. Discover `/supported`, then `/verify` + `/settle`. USDT on BSC typically Permit2.
+Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typically Permit2.
 
 ---
 
-## 5. Path A — Backend relayer
-
-After settle → ledger → `registerFor` (future) / policy → success or **refund §7**.
+## 5. Path A — Relayer
 
 | Address / key | Role |
 |---------------|------|
-| `0x6783714167eC1c3519455AfCf2c93f6074624575` | Receive 5 USDT (`payTo`) |
-| Relayer KMS/EOA | Gas + register only |
-| B402 API secret | Backend only |
+| Safe `0xFf2659…373c` | Receive 5 USDT |
+| Relayer KMS/EOA | Gas + `registerFor` only |
+| B402 secret | Backend only |
 
 ---
 
-## 6–8. Rules, refund, negative tests
+## 6–8. Rules, refund, tests
 
-Unchanged in substance: pre-check cap; idempotent paymentId; refund 5 USDT to **payer** if settle OK but register fails; reject wrong payTo / amount / asset / replay.
+Idempotent paymentId; refund 5 USDT to **payer** if settle OK but register fails; reject wrong payTo (must equal Safe above).
 
 ---
 
-## 9. Implementation checklist
+## 9. Checklist
 
-- [x] Set `BIP_PAY_TO` address  
-- [ ] Upgrade to multisig **or** document EOA custody  
+- [x] Multisig Safe deployed & verified on BSC  
+- [x] `BIP_PAY_TO` set to Safe  
 - [ ] B402 credentials  
-- [ ] API register + ledger + relayer + refund  
-- [ ] Negative tests + audit gates  
+- [ ] API + ledger + relayer + refund  
+- [ ] Negative tests + remaining audit gates  
 
 ---
 
 ## 10. References
 
-- payTo: `0x6783714167eC1c3519455AfCf2c93f6074624575`  
+- payTo Safe: `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`  
 - USDT: `0x55d398326f99059fF775485246999027B3197955`  
-- ERC-8004 Identity: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`  
-- Explorer: https://bscscan.com/address/0x6783714167eC1c3519455AfCf2c93f6074624575  
-
-**Security-first:** address locked for config; production receipts should move to multisig when ready.
+- ERC-8004: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`  
