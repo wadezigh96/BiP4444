@@ -11,6 +11,7 @@
 - Facilitator: B402. Price: exactly 5 USDT. Asset: `0x55d398326f99059fF775485246999027B3197955` (18 decimals). Atomic amount: `5000000000000000000`.
 - The only allowed `payTo` is Safe `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`. Reject configuration drift at startup and fail closed; never fall back to an EOA or client-provided destination.
 - Identity is an existing ERC-8004 `agentId` on BSC identity registry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`. Resolve the current `ownerOf(agentId)` from chain before creating a payment requirement and again before registration. Do not trust a client-supplied owner.
+- Before relayer registration, require a fresh EIP-712 authorization signed by the current ERC-8004 owner. The signature binds `agentId`, `paymentIdHash`, canonical `roleHash`, owner nonce, deadline, chain ID, and controller address. The contract rejects expired signatures, signatures valid for more than 24 hours, reused payment hashes, and invalid signatures. A payment settlement alone is not owner consent.
 - `role` is a validated, bounded off-chain string in v1. It is not authorization to control the agent or its wallet.
 - One settled `paymentId` may grant at most one membership. Enforce with database uniqueness/transactional state transitions, not process memory.
 - Membership cap 4,444 is enforced on-chain and is authoritative. A preflight count is informational only; handle the on-chain cap rejection and refund policy.
@@ -78,6 +79,37 @@ Failure branches:
 - `REGISTERED`: terminal success for that paymentId. Replays return the same result and MUST NOT create a second membership.
 
 Use a stable server-generated operation/idempotency key across retries. Persist the facilitator's payment/settlement reference and normalized payer address. Never infer the payer from an unverified request field. Database uniqueness constraints MUST cover facilitator payment ID and successful membership grant. The DB transaction cannot atomically include an external chain transaction; use an outbox/job pattern plus reconciliation.
+
+## 4A. Owner consent for relayer registration
+
+The relayer contract does not accept a bare `registerFor(agentId)` call. After B402 settlement is confirmed, the backend must ask the authenticated current ERC-8004 owner to sign an EIP-712 authorization. The signature is not a payment signature and does not replace B402 verification.
+
+Domain:
+- `name`: `BIP4444 Membership Controller`
+- `version`: `1`
+- `chainId`: `56` for BSC mainnet (use the matching chain in isolated test environments)
+- `verifyingContract`: the deployed membership controller address
+
+Typed data:
+```json
+{
+  "MembershipAuthorization": [
+    { "name": "agentId", "type": "uint256" },
+    { "name": "paymentIdHash", "type": "bytes32" },
+    { "name": "roleHash", "type": "bytes32" },
+    { "name": "nonce", "type": "uint256" },
+    { "name": "deadline", "type": "uint256" }
+  ]
+}
+```
+
+- `paymentIdHash = keccak256(UTF8(server-generated internal payment operation ID))`; do not accept a client-chosen payment ID.
+- `roleHash = keccak256(UTF8(canonical validated role string))`; use the exact same canonicalization on client and server.
+- Read the current owner nonce from the contract immediately before requesting the signature. A stale nonce must fail closed and require a new signature.
+- Deadline must be in the future and no more than 24 hours ahead. Prefer a shorter operational lifetime (for example, 10–15 minutes).
+- Backend must verify that B402's confirmed settled payment ID maps to this exact operation and that the payer/owner binding follows the product's authorization policy. Never infer payment identity from client JSON.
+- Call `registerFor(agentId, paymentIdHash, roleHash, deadline, ownerSignature)` only after settlement confirmation. The contract checks owner consent and marks the payment hash used. A contract success does **not** independently prove that B402 settled; the relayer and durable ledger remain critical trust boundaries.
+- Persist the typed-data fields, signature-verification result, B402 settlement reference, and transaction hash with secrets/signatures redacted where possible. Do not log the raw signature.
 
 ## 5. Successful response
 
