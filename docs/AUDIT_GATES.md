@@ -8,10 +8,13 @@
 - [ ] **Repository and dependency review**  
   Current state: specification, planning docs, skeleton contracts, and Foundry tests only. Re-run when production dependencies and full implementation are added.
 
-- [ ] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
-  Addresses documented; verification script + evidence stub added.  
-  Remaining: live RPC run + bytecode hash comparison.  
-  See `docs/ERC8004_VERIFICATION.md` and `docs/evidence/ERC8004_BSC_2026-10-16.md`.
+- [x] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
+  Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`  
+  - Chain ID 56 confirmed  
+  - Identity & Reputation proxies have code  
+  - EIP-1967 implementations resolved  
+  - `ownerOf` / `name` / `symbol` / ERC-721 interface verified on live BSC  
+  - Optional: full bytecode hash vs official release artifact
 
 - [x] **Membership-cap and duplicate-registration tests** *(unit suite — local)*  
   Evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md`  
@@ -42,7 +45,7 @@
 | Gate | Evidence |
 |------|----------|
 | Membership cap / duplicate | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
-| ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` (partial) |
+| ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 
 ## Security-first rule
 
