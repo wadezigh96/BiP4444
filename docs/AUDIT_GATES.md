@@ -15,8 +15,8 @@
   Evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md`
 
 - [ ] **x402 facilitator and settlement verification**  
-  Design: `docs/X402_REQUIREMENTS.md` (flow, facilitators, negative tests).  
-  Remaining: choose production facilitator, implement verify/settle adapter, pass all negative tests, record evidence.
+  Design locked: B402, 5 USDT, path A, refund yes, identity+role — `docs/X402_REQUIREMENTS.md`.  
+  Remaining: B402 adapter, relayer/`registerFor`, refund worker, negative tests, evidence.
 
 - [ ] **Alert authenticity, reporter authorization, and key-rotation tests**  
   See `docs/ALERT_SHIELD.md`.
@@ -39,7 +39,7 @@
 |------|----------|
 | Membership cap / duplicate | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
-| x402 | Design in `docs/X402_REQUIREMENTS.md`; runtime evidence TBD |
+| x402 | Design locked in `docs/X402_REQUIREMENTS.md`; runtime evidence TBD |
 
 ## Security-first rule
 

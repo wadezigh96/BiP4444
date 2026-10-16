@@ -1,253 +1,276 @@
 # BIP4444 x402 Payment Design (BSC)
 
-**Status:** Design / pre-implementation  
+**Status:** Design locked (pre-implementation)  
 **Last updated:** 2026-10-16  
 **Network:** BNB Smart Chain mainnet — CAIP-2 `eip155:56`  
 **Policy:** No production payment flow and no membership grant until verify + settle succeed and negative tests pass.
 
 ---
 
-## 1. Goal
+## 0. Locked product decisions (2026-10-16)
 
-Use **x402 (v2)** so an agent (or operator) can pay for **BIP membership registration** (and later paid services) over HTTP, with settlement on BSC, without BIP4444 holding user private keys.
+| Decision | Choice |
+|----------|--------|
+| **Facilitator** | **B402** (Binance x402 on BSC) |
+| **Price** | **5 USDT** exact (`scheme: exact`) |
+| **Asset** | Binance-Peg **USDT** on BSC: `0x55d398326f99059fF775485246999027B3197955` (18 decimals) |
+| **Atomic amount** | `5000000000000000000` (5 × 10^18) |
+| **Register path** | **A — Backend relayer** after successful settle |
+| **Identity** | ERC-8004 `agentId` + live `ownerOf(agentId)` check |
+| **Role** | Client supplies a **role** string at registration (stored off-chain + echoed in membership record; on-chain optional later) |
+| **Refund if settle OK but register fails** | **Yes** — see §7 |
+| **`payTo`** | BIP treasury address — **TBD before mainnet** (multisig recommended); must be fixed in config, never client-supplied |
 
-**Hard rule:** Membership must **not** be granted because a client *claims* it paid. Only after the BIP backend has:
-
-1. Validated the payment payload against published requirements, and  
-2. Received a successful **facilitator settle** result (or equivalent on-chain confirmation tied to that unique payment),
-
-may `BIPMembershipController.register` (or an authorized relayer path) run.
+Still open: exact B402 API base URL + credentials (ops), treasury multisig address, whether `role` is written on-chain in a later contract revision.
 
 ---
 
-## 2. Protocol flow (x402 v2)
+## 1. Goal
+
+Use **x402 (v2)** + **B402** so an agent operator can pay **5 USDT** for **BIP membership** bound to an ERC-8004 identity and a declared **role**, without BIP holding private keys.
+
+**Hard rule:** Membership is granted only after:
+
+1. Payment payload matches server-issued requirements, and  
+2. B402 **verify** + **settle** succeed for that unique payment, and  
+3. Relayer successfully completes registration for that `agentId` (or refund path runs).
+
+---
+
+## 2. Protocol flow (locked: B402 + path A)
 
 ```
-Client (agent/wallet)          BIP API (merchant)           Facilitator              BSC
-        |                              |                          |                    |
-        | 1. POST /register (no pay)   |                          |                    |
-        |----------------------------->|                          |                    |
-        | 2. 402 + PAYMENT-REQUIRED    |                          |                    |
-        |<-----------------------------|                          |                    |
-        | 3. Sign EIP-712 auth         |                          |                    |
-        |    (Permit2 / EIP-3009)      |                          |                    |
-        | 4. POST /register            |                          |                    |
-        |    + PAYMENT-SIGNATURE       |                          |                    |
-        |----------------------------->|                          |                    |
-        |                              | 5. POST /verify          |                    |
-        |                              |------------------------->|                    |
-        |                              | 6. valid / invalid       |                    |
-        |                              |<-------------------------|                    |
-        |                              | 7. POST /settle          |                    |
-        |                              |------------------------->|                    |
-        |                              |                          | 8. submit tx       |
-        |                              |                          |------------------->|
-        |                              | 9. success + tx hash     |                    |
-        |                              |<-------------------------|                    |
-        |                              | 10. register(agentId)    |                    |
-        |                              |     on-chain (or issue   |                    |
-        |                              |     signed permit)       |                    |
-        | 11. 200 + membership proof   |                          |                    |
-        |<-----------------------------|                          |                    |
+Client                         BIP API                      B402                    BSC
+  |  POST /v1/membership/register                           |                       |
+  |  { agentId, role } (no payment)                         |                       |
+  |--------------------------->|                            |                       |
+  |  402 + PAYMENT-REQUIRED    |                            |                       |
+  |  (5 USDT, eip155:56,       |                            |                       |
+  |   resource binds agentId)  |                            |                       |
+  |<---------------------------|                            |                       |
+  |  sign Permit2/EIP-712      |                            |                       |
+  |  POST + PAYMENT-SIGNATURE  |                            |                       |
+  |--------------------------->|                            |                       |
+  |                            |  verify                    |                       |
+  |                            |--------------------------->|                       |
+  |                            |  settle                    |                       |
+  |                            |--------------------------->|                       |
+  |                            |                            |  transfer USDT        |
+  |                            |                            |---------------------->|
+  |                            |  success + txHash          |                       |
+  |                            |<---------------------------|                       |
+  |                            |  relayer: register(agentId)|                       |
+  |                            |  (owner checks / policy)   |---------------------->|
+  |  200 { membership, role,   |                            |                       |
+  |       payment, identity }  |                            |                       |
+  |<---------------------------|                            |                       |
 ```
 
-### HTTP headers (v2)
+### HTTP headers (x402 v2)
 
 | Header | Direction | Role |
 |--------|-----------|------|
-| `PAYMENT-REQUIRED` | Server → Client | Base64 `PaymentRequired` (scheme, network, amount, asset, payTo, timeout, extra) |
-| `PAYMENT-SIGNATURE` | Client → Server | Base64 `PaymentPayload` (signed authorization) |
+| `PAYMENT-REQUIRED` | Server → Client | Base64 `PaymentRequired` |
+| `PAYMENT-SIGNATURE` | Client → Server | Base64 `PaymentPayload` |
 | `PAYMENT-RESPONSE` | Server → Client | Base64 settlement outcome |
 
-Do **not** treat legacy `X-PAYMENT` as authoritative for new BIP endpoints.
-
 ---
 
-## 3. What BIP sells (v1 scope)
+## 3. Registration resource (identity + role)
 
-| Resource | Description | Suggested pricing model |
-|----------|-------------|-------------------------|
-| `POST /v1/membership/register` | One-time BIP membership for a given ERC-8004 `agentId` (subject to on-chain cap 4,444) | Exact amount, once per agentId |
-| Future: Alert Shield premium / API | Optional paid notices | Per-request or subscription (out of v1) |
+### Request (before or with payment)
 
-Registration requirements in the 402 body must bind at least:
+```json
+{
+  "agentId": "1001",
+  "role": "operator"
+}
+```
 
-- `agentId` (uint / string in resource metadata)
+| Field | Rules |
+|-------|--------|
+| `agentId` | Required. Must exist on ERC-8004 Identity Registry proxy `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`. |
+| `role` | Required. Non-empty string; max length **64**; charset `[a-zA-Z0-9_-]` recommended; examples: `operator`, `analyst`, `guardian`, `builder`. Stored in payment/membership ledger. Not a privilege escalation flag on-chain in v1. |
+
+### What 402 must bind
+
 - `network`: `eip155:56`
-- `scheme`: `exact` (preferred for membership)
-- `asset` + `amount` (atomic units)
-- `payTo`: BIP treasury / receiver address (never a user-supplied address)
-- `maxTimeoutSeconds`
-- Unique payment / resource id for **idempotency and replay protection**
+- `scheme`: `exact`
+- `asset`: USDT `0x55d398326f99059fF775485246999027B3197955`
+- `amount`: `5000000000000000000`
+- `payTo`: configured BIP treasury
+- Resource metadata: `agentId`, `role`, unique `paymentId` / nonce, expiry
+
+### Success response (illustrative)
+
+```json
+{
+  "membershipId": "1",
+  "agentId": "1001",
+  "role": "operator",
+  "identity": {
+    "registry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+    "owner": "0x..."
+  },
+  "payment": {
+    "asset": "USDT",
+    "amount": "5",
+    "txHash": "0x...",
+    "facilitator": "B402"
+  },
+  "status": "active"
+}
+```
 
 ---
 
-## 4. Facilitator options on BSC
+## 4. B402 facilitator
 
-BIP4444 should **not** hardcode a single facilitator forever. Config must allow switching after security review.
+| Item | Value |
+|------|--------|
+| Facilitator | **B402** |
+| Network | `eip155:56` |
+| Ops | Call **only from BIP trusted backend**; API secrets in env/secret manager |
+| Endpoints | Discover via B402 docs: `supported` / `verify` / `settle` (v2 preferred) |
+| Settlement | Idempotent settle; gas sponsored by facilitator |
+| Auth method | Prefer path returned by `/supported` for USDT (typically **Permit2** on BSC) |
 
-| Facilitator | Notes | Mainnet posture (as of research 2026-10) |
-|-------------|--------|------------------------------------------|
-| **B402 (Binance)** | Official Binance x402 stack on BSC; `/supported`, `/verify`, `/settle`; idempotent settle; gas sponsored | Production on `eip155:56`; credentials often required; call **only from trusted backend** |
-| **Dexter** | Public endpoint `https://x402.dexter.cash`; network `eip155:56`; Permit2 path; gas sponsored | Claimed production BSC |
-| **XPay** | `https://facilitator-xpay.llc/bsc`; USDC Permit2 on BSC | Production path for USDC |
-| Self-hosted / other | Full control; higher ops burden | Optional later |
+Config keys (names illustrative): `B402_BASE_URL`, `B402_API_KEY`, `BIP_PAY_TO`, `MEMBERSHIP_PRICE_ATOMIC=5000000000000000000`, `MEMBERSHIP_ASSET=0x55d398...`.
 
-**Recommendation for design phase:**
-
-1. Implement against **x402 v2 message shapes** + a thin `FacilitatorClient` interface (`supported` / `verify` / `settle`).
-2. First integration target: **B402** (ecosystem alignment with BSC + Binance Agent OS) *or* Dexter for permissionless testing — **decide before mainnet** and record credentials handling in ops runbook.
-3. Always discover live assets/methods via facilitator `supported` (or equivalent); do not hardcode token lists in production binaries without refresh.
-
-### B402-oriented endpoints (illustrative)
-
-| Operation | Typical path | Purpose |
-|-----------|--------------|---------|
-| Supported | `POST .../supported` | Networks, assets, methods, spender addresses |
-| Verify | `POST .../verify` | Validate signature **without** broadcasting |
-| Settle | `POST .../settle` | Submit on-chain; idempotent retries |
-
-Secret API keys must live only on the BIP backend (env / secret manager). Never in 402 responses, mobile apps, or agent prompts.
+Always refresh supported methods from B402 in production rather than assuming a fixed EIP-712 domain forever.
 
 ---
 
-## 5. Assets and authorization methods (BSC)
+## 5. Path A — Backend relayer (locked)
 
-BSC stablecoins are commonly **18 decimals**. Many **lack EIP-3009**, so production paths often use **Permit2**.
+After B402 settle success:
 
-| Token | Example contract (BSC) | Decimals | Typical x402 path |
-|-------|------------------------|----------|-------------------|
-| USDT | `0x55d398326f99059fF775485246999027B3197955` | 18 | Permit2 exact |
-| USDC | `0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d` | 18 | Permit2 exact |
-| USD1 / U (B402-listed) | See B402 `/supported` | 18 | EIP-3009 and/or Permit2 |
+1. Persist ledger row: `paymentId`, `agentId`, `role`, `payer`, `txHash`, `status=settled`.
+2. Load ERC-8004 `ownerOf(agentId)`.
+3. Policy check (v1):
+   - Prefer: payer == agent owner **or** explicit operator allowlist later; **minimum**: registration is for this `agentId` only and agent exists.
+   - Document final rule: recommended **payer must be current agent owner** to reduce griefing.
+4. Relayer wallet (dedicated key, minimal BNB for gas) submits on-chain membership registration.
+   - Skeleton today: only agent owner can `register` — **contract must evolve** to either:
+     - `registerFor(agentId, owner)` callable by `RELAYER_ROLE` after off-chain payment proof, **or**
+     - temporary off-chain “paid allowlist” + user still calls `register` (not pure A).
+   - **Target for path A:** add `registerFor(uint256 agentId)` restricted to relayer role, still verifying `ownerOf` is recorded and events include registrant metadata; **do not deploy** until audited.
+5. On success: `status=registered`, return 200.
+6. On failure: enter **refund procedure** (§7).
 
-**Canonical Permit2 (BSC):** `0x000000000022D473030F116dDEE9F6B43aC78BA3`  
-Payer may need a one-time ERC-20 `approve` to Permit2 before gasless repeats; some facilitators sponsor that approval.
-
-BIP config must pin:
-
-- Accepted `asset` addresses  
-- Atomic `amount` for membership  
-- `payTo` receiver  
-- Allowed `scheme` values (`exact` required for v1 membership)
-
----
-
-## 6. Server-side rules (BIP merchant)
-
-### 6.1 Before issuing 402
-
-- Resolve `agentId` from the request.
-- Check off-chain: not already an active BIP member (optional UX); **on-chain cap remains authoritative**.
-- Build `PaymentRequired` with BIP-controlled `payTo`, amount, asset, network `eip155:56`, timeout, and resource id that includes `agentId` + nonce/expiry.
-
-### 6.2 On `PAYMENT-SIGNATURE`
-
-1. Decode and schema-validate payload (x402 v2).
-2. Enforce: network, asset, amount, `payTo`, scheme match the **server-issued** requirements (not client-invented).
-3. Call facilitator **verify**.
-4. On verify success, call facilitator **settle** (or poll idempotent settle until terminal success/failure).
-5. Persist settlement record: `paymentId`, `agentId`, `txHash`, `payer`, `amount`, `asset`, timestamp, facilitator id.
-6. Only then trigger membership:
-   - **Preferred:** backend submits `register(agentId)` via a dedicated relayer key **after** checks, **or**
-   - User submits `register` with a short-lived **server-signed registration permit** that the contract checks (design variant — decide before coding).
-7. Return 200 + membership status + `PAYMENT-RESPONSE`.
-
-### 6.3 Idempotency & replay
-
-- One successful settlement → at most one membership grant for that payment id.
-- Replayed `PAYMENT-SIGNATURE` / same payment id → return previous result; do not double-charge; do not double-register.
-- Expired authorization → reject.
-- Settled payment for agentId A must not register agentId B.
-
-### 6.4 Failure modes
-
-| Condition | HTTP / behaviour |
-|-----------|------------------|
-| No / invalid signature | 402 or 400; no register |
-| Verify fails | 402/400; no settle |
-| Settle fails / pending timeout | 402/503; **no** register; allow safe retry if facilitator idempotent |
-| Cap reached on-chain | 409 / 403 after payment? **Prefer** pre-check and avoid taking payment if cap full; if payment already settled, document refund/manual process |
-| Already member | 409; do not settle a second time |
-
-**Cap and payment ordering (open decision):** Prefer **check cap before settle** when possible; document residual race if two payments settle near 4444.
+Relayer key: hardware/KMS where possible; no shared use with treasury `payTo`.
 
 ---
 
-## 7. Contract interaction options
+## 6. Server-side rules
 
-| Option | Description | Pros | Cons |
-|--------|-------------|------|------|
-| **A. Backend relayer** | After settle, BIP server calls `register(agentId)` with a key that is allowed only if payment ledger says OK — *or* server calls only after verifying `msg.sender` is agent owner in a two-step flow | Simple skeleton evolution | Relayer key is sensitive; still need owner binding |
-| **B. User registers after receipt** | Settle returns receipt; user (agent owner) calls `register(agentId)` themselves; optional off-chain allowlist | No register key | Race / UX; need on-chain proof of payment or server allowlist |
-| **C. Payment-gated register** | Contract verifies a payment attestation (facilitator sig / Merkle / oracle) | Strong binding | More contract complexity; audit surface |
+### Before 402
 
-**Design default for skeleton era:** **A or B with explicit payment ledger**, no mainnet until chosen and tested. Option C is post-audit enhancement.
+- Validate `agentId` + `role`.
+- Optional: reject if already active member.
+- **Pre-check** `activeMemberCount < 4444` (best effort); on-chain remains source of truth.
+- Issue requirements with fixed 5 USDT and bound `agentId`/`role`.
 
-Current skeleton only has `register(agentId)` with ERC-8004 owner check — payment gating is **off-chain** until a permit module is added.
+### On PAYMENT-SIGNATURE
+
+1. Schema-validate x402 v2 payload.  
+2. Match network, asset, amount, payTo, scheme to **server-issued** requirements.  
+3. B402 verify → settle.  
+4. Ledger write.  
+5. Relayer register.  
+6. Respond with membership + identity owner + role + payment.
+
+### Idempotency
+
+- One `paymentId` → one settle effect → one membership grant.  
+- Replay returns prior result.  
+- Payment for agentId A never registers B.
+
+---
+
+## 7. Refund policy (locked: Yes)
+
+If **USDT settle succeeds** but **membership registration cannot complete**, BIP **must** refund.
+
+### Triggers
+
+- On-chain cap reached (race after pre-check)
+- `register` / `registerFor` reverts unexpectedly
+- Agent burned / invalid between settle and register
+- Relayer outage beyond timeout after settle (ops SLA)
+
+### Procedure
+
+1. Mark ledger `status=refund_pending` with reason code.  
+2. **Do not** leave user without either membership or refund.  
+3. Refund **5 USDT** to **payer** address from settlement record (not a different address supplied later).  
+4. Prefer automated ERC-20 transfer from treasury hot wallet with limits; else manual multisig within published SLA (e.g. 48h).  
+5. Mark `status=refunded` + refund `txHash`.  
+6. Alert ops.  
+
+### Non-refund cases
+
+- Verify/settle never succeeded  
+- User error before settle (wrong signature rejected)  
+- Successful membership (no refund)
+
+### Cap race mitigation
+
+- Pre-check count before settle  
+- Serialize relayer registrations  
+- Refund remaining edge cases per above
 
 ---
 
 ## 8. Required negative tests
 
-Must exist and pass before production:
-
 | # | Case | Expected |
 |---|------|----------|
 | 1 | Expired authorization | Reject; no membership |
-| 2 | Wrong chain (`network` ≠ `eip155:56`) | Reject |
-| 3 | Wrong asset | Reject |
-| 4 | Wrong `payTo` | Reject |
-| 5 | Wrong amount (under/over) | Reject |
-| 6 | Replayed payment proof / payment id | Reject second settle effect; no double membership |
-| 7 | Duplicate registration same agentId | Reject |
-| 8 | Verify OK but settle fails | No membership |
-| 9 | Client claims paid; no valid settle record | Reject |
-| 10 | Signature for agentId X used for agentId Y | Reject |
-| 11 | Cap already 4444 | No successful new membership |
-| 12 | Facilitator secret missing / wrong | Fail closed |
+| 2 | Wrong network | Reject |
+| 3 | Wrong asset (not USDT) | Reject |
+| 4 | Wrong payTo | Reject |
+| 5 | Amount ≠ 5 USDT atomic | Reject |
+| 6 | Replay payment id | No double charge / double membership |
+| 7 | Duplicate agentId membership | Reject |
+| 8 | Verify OK, settle fails | No membership |
+| 9 | Claim paid, no settle record | Reject |
+| 10 | Payment bound to agentId X used for Y | Reject |
+| 11 | Cap 4444 | No new membership; refund if settled |
+| 12 | Missing B402 credentials | Fail closed |
+| 13 | Missing/invalid `role` | 400 before 402 |
+| 14 | Settle OK, register fails | `refund_pending` → refund 5 USDT |
 
 ---
 
 ## 9. Privacy & security
 
-- Never request seed phrases or private keys.
-- Facilitator secrets and `payTo` hot keys only on server.
-- Rate-limit `/register` and 402 issuance.
-- Log payment ids and tx hashes; do not log raw secrets or full signed payloads in plaintext longer than needed.
-- Phishing: official BIP domain only in any payment UX / QR.
+- No seed phrases / private keys from operators.  
+- B402 secrets + relayer key + treasury controls server-side only.  
+- Rate-limit register and 402 issuance.  
+- `role` is public metadata, not auth secret.  
+- Official domain only in payment UX.
 
 ---
 
-## 10. Open decisions (block implementation)
+## 10. Implementation checklist
 
-1. **Primary facilitator** for mainnet (B402 vs Dexter vs other) and credential process.  
-2. **Membership price** (asset + atomic amount).  
-3. **`payTo` address** custody (multisig / treasury).  
-4. **Register path** after settle: relayer vs user-submitted vs on-chain attestation (A/B/C above).  
-5. **Refund policy** if settle succeeds but `register` fails (cap race, owner change).  
-6. Testnet path (`eip155:97`) for QA only — never mix testnet payloads with mainnet keys.
-
----
-
-## 11. Implementation checklist (when coding starts)
-
-- [ ] `FacilitatorClient` interface + B402 (or chosen) adapter  
-- [ ] Config: network, assets, amounts, payTo, timeouts  
-- [ ] `POST /v1/membership/register` 402 + signature handling  
-- [ ] Payment ledger (DB) with unique constraints  
-- [ ] Wire to membership registration policy  
-- [ ] Negative test suite (section 8)  
-- [ ] Runbook: key rotation, facilitator outage, manual reconcile  
+- [ ] B402 adapter (`supported` / `verify` / `settle`)  
+- [ ] Config: 5 USDT atomic, USDT address, payTo, B402 creds  
+- [ ] `POST /v1/membership/register` with `agentId` + `role`  
+- [ ] Payment ledger + unique constraints  
+- [ ] Relayer path + contract `registerFor` / role (audit before deploy)  
+- [ ] Refund worker + runbook  
+- [ ] Negative tests §8  
+- [ ] Testnet QA on `eip155:97` only with test credentials  
 
 ---
 
-## 12. References
+## 11. References
 
-- x402 Foundation / v2 HTTP headers (`PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE`)  
-- B402 / Binance Open Platform — BSC facilitator (`eip155:56`)  
-- Dexter BSC facilitator — Permit2 exact, gas sponsored  
-- Permit2: `0x000000000022D473030F116dDEE9F6B43aC78BA3` on BSC  
-- BIP docs: `docs/SECURITY.md`, `docs/MEMBERSHIP_CONTROLLER.md`, `docs/AUDIT_GATES.md`  
+- B402 / Binance x402 on BSC  
+- USDT BSC: `0x55d398326f99059fF775485246999027B3197955`  
+- ERC-8004 Identity proxy: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`  
+- `docs/MEMBERSHIP_CONTROLLER.md`, `docs/SECURITY.md`, `docs/AUDIT_GATES.md`  
 
-**Security-first:** design only. No live payment enablement until this checklist and audit gates pass.
+**Security-first:** decisions locked for design; no mainnet payments until implementation, tests, and remaining audit gates pass.
