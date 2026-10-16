@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "updatedAt": "2026-10-16T09:00:00Z",
+  "keys": [],
+  "domainAllowlist": ["bips4444.vercel.app"],
+  "note": "Placeholder key directory. Add Ed25519 public keys after offline keygen. Clients must verify alert signatures against active keys only."
+}
