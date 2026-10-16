@@ -18,13 +18,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: stable
+
+      - name: Install pinned forge-std dependency
+        run: forge install foundry-rs/forge-std@v1.9.7 --no-git
 
       - name: Run unit tests
         run: forge test -vvv
