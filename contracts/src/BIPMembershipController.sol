@@ -15,7 +15,8 @@ contract BIPMembershipController is IBIPMembershipController {
     // -------------------------------------------------------------------------
     // Constants
     // -------------------------------------------------------------------------
-    uint256 public constant MAX_MEMBERS = 4444;
+    /// @dev Hard cap of active BIP memberships. Exposed via MAX_MEMBERS().
+    uint256 private constant _MAX_MEMBERS = 4444;
 
     // -------------------------------------------------------------------------
     // Immutable / configuration
@@ -85,7 +86,7 @@ contract BIPMembershipController is IBIPMembershipController {
     // Views
     // -------------------------------------------------------------------------
     function MAX_MEMBERS() external pure override returns (uint256) {
-        return MAX_MEMBERS;
+        return _MAX_MEMBERS;
     }
 
     function activeMemberCount() external view override returns (uint256) {
@@ -124,7 +125,7 @@ contract BIPMembershipController is IBIPMembershipController {
         Membership storage m = _memberships[agentId];
         if (m.active) revert AlreadyMember();
 
-        if (_activeMemberCount >= MAX_MEMBERS) revert CapReached();
+        if (_activeMemberCount >= _MAX_MEMBERS) revert CapReached();
 
         uint256 newId = _nextMembershipId++;
         m.membershipId = newId;

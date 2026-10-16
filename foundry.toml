@@ -1,9 +1,13 @@
 [profile.default]
-src = "contracts/src"
+src = "contracts"
+test = "test"
 out = "out"
 libs = ["lib"]
 solc_version = "0.8.24"
 optimizer = true
 optimizer_runs = 200
+
+# Allow imports like "../contracts/..." from test/
+fs_permissions = [{ access = "read", path = "./" }]
 
 # Skeleton only — do not treat as production-ready configuration.

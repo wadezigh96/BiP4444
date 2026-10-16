@@ -1,0 +1,16 @@
+# Foundry
+cache/
+out/
+lib/
+
+# Node
+node_modules/
+
+# Env / secrets
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
