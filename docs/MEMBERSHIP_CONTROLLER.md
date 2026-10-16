@@ -1,7 +1,7 @@
 # BIP4444 Membership Controller Specification
 
-**Status:** Design / pre-implementation  
-**Last updated:** 2026-10-16  
+**Status:** Pre-audit implementation; not production-ready  
+**Last updated:** 2026-10-17  
 **Related:** ERC-8004 Identity Registry on BSC; x402 payment design
 
 ## Goal
@@ -48,7 +48,7 @@ See `docs/X402_REQUIREMENTS.md` §0:
 
 ## Interface evolution (path A)
 
-Current implementation keeps `register(agentId)` for owner self-service and adds `registerFor(agentId, paymentIdHash, roleHash, deadline, ownerSignature)` for the backend relayer.
+The prior public `register(agentId)` method has been removed because it allowed free registration and bypassed the required 5 USDT payment gate. Registration is now only through `registerFor(agentId, paymentIdHash, roleHash, deadline, ownerSignature)`.
 
 - `registerFor` is relayer-allowlisted and requires a valid EIP-712 signature from the current ERC-8004 owner.
 - The typed authorization binds `agentId`, a server-generated payment-operation hash, canonical role hash, per-owner nonce, deadline, chain ID, and controller address.
