@@ -50,7 +50,6 @@ contract BIPMembershipController is IBIPMembershipController {
     error CapReached();
     error AlreadyMember();
     error NotMember();
-    error NotAgentOwner();
     error ZeroAddress();
     error ZeroAgentId();
     error InvalidSignature();
