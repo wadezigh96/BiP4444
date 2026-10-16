@@ -6,17 +6,18 @@
 ## Gates
 
 - [ ] **Repository and dependency review**  
-  Current state: specification, planning docs, and skeleton contracts only. Re-run when production dependencies and full implementation are added.  
-  Tracking: Issue (see GitHub issues)
+  Current state: specification, planning docs, skeleton contracts, and Foundry tests only. Re-run when production dependencies and full implementation are added.
 
 - [ ] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
   Addresses documented; verification script + evidence stub added.  
   Remaining: live RPC run + bytecode hash comparison.  
   See `docs/ERC8004_VERIFICATION.md` and `docs/evidence/ERC8004_BSC_2026-10-16.md`.
 
-- [ ] **Membership-cap and duplicate-registration tests**  
-  Skeleton contract exists (`contracts/src/BIPMembershipController.sol`).  
-  Remaining: full test suite proving hard cap of 4,444 and no duplicate agentId.
+- [x] **Membership-cap and duplicate-registration tests** *(unit suite — local)*  
+  Evidence: `docs/evidence/FOUNDRY_TESTS_2026-10-16.md`  
+  - 22/22 Foundry tests passed (including `test_Cap_ReachedAt4444`)  
+  - Cap 4444, duplicate rejection, ownership checks covered  
+  - Still skeleton code; policy open questions remain before production
 
 - [ ] **x402 facilitator and settlement verification**  
   See `docs/X402_REQUIREMENTS.md`. All negative tests must pass.
@@ -28,7 +29,7 @@
   Covers endpoints, QR codes, and public records.
 
 - [ ] **Unit, integration, and negative security tests**  
-  Including local BSC fork testing.
+  Unit membership tests done; broader integration / payment / alert tests still pending.
 
 - [ ] **Independent review of contracts and deployment configuration**  
   External or second-pair review of final contracts and deploy scripts.
@@ -38,7 +39,10 @@
 
 ## Evidence location
 
-When a gate is completed, record the evidence (PR link, test output, bytecode hash, review notes, etc.) in this file or under `docs/evidence/`.
+| Gate | Evidence |
+|------|----------|
+| Membership cap / duplicate | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
+| ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` (partial) |
 
 ## Security-first rule
 
