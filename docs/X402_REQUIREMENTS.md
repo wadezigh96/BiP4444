@@ -15,13 +15,22 @@
 | **Price** | **5 USDT** exact (`scheme: exact`) |
 | **Asset** | Binance-Peg **USDT** on BSC: `0x55d398326f99059fF775485246999027B3197955` (18 decimals) |
 | **Atomic amount** | `5000000000000000000` (5 × 10^18) |
+| **`payTo` custody** | **Multisig** on BSC (Gnosis Safe or equivalent). Address **TBD** — create & verify before mainnet; never an EOA hot wallet for production receipts. |
 | **Register path** | **A — Backend relayer** after successful settle |
 | **Identity** | ERC-8004 `agentId` + live `ownerOf(agentId)` check |
 | **Role** | Client supplies a **role** string at registration (stored off-chain + echoed in membership record; on-chain optional later) |
 | **Refund if settle OK but register fails** | **Yes** — see §7 |
-| **`payTo`** | BIP treasury address — **TBD before mainnet** (multisig recommended); must be fixed in config, never client-supplied |
 
-Still open: exact B402 API base URL + credentials (ops), treasury multisig address, whether `role` is written on-chain in a later contract revision.
+Still open: exact B402 API base URL + credentials (ops); **multisig address + signer set + threshold**; whether `role` is written on-chain in a later contract revision.
+
+### payTo multisig requirements
+
+- Deployed on **BSC mainnet** (chain ID 56).
+- Receives x402 membership payments (5 USDT).
+- **Not** the same key as the relayer (path A).
+- Signers and threshold documented in ops runbook before go-live.
+- Refunds (§7) may use a separate limited hot wallet or the same multisig with dual-control policy — document which in runbook.
+- Address is fixed in BIP server config and embedded in every `PAYMENT-REQUIRED`; clients cannot override `payTo`.
 
 ---
 
@@ -45,8 +54,8 @@ Client                         BIP API                      B402                
   |  { agentId, role } (no payment)                         |                       |
   |--------------------------->|                            |                       |
   |  402 + PAYMENT-REQUIRED    |                            |                       |
-  |  (5 USDT, eip155:56,       |                            |                       |
-  |   resource binds agentId)  |                            |                       |
+  |  (5 USDT → multisig payTo, |                            |                       |
+  |   eip155:56, agentId bound)|                            |                       |
   |<---------------------------|                            |                       |
   |  sign Permit2/EIP-712      |                            |                       |
   |  POST + PAYMENT-SIGNATURE  |                            |                       |
@@ -55,14 +64,14 @@ Client                         BIP API                      B402                
   |                            |--------------------------->|                       |
   |                            |  settle                    |                       |
   |                            |--------------------------->|                       |
-  |                            |                            |  transfer USDT        |
+  |                            |                            |  USDT → multisig      |
   |                            |                            |---------------------->|
   |                            |  success + txHash          |                       |
   |                            |<---------------------------|                       |
   |                            |  relayer: register(agentId)|                       |
-  |                            |  (owner checks / policy)   |---------------------->|
+  |                            |----------------------------|---------------------->|
   |  200 { membership, role,   |                            |                       |
-  |       payment, identity }  |                            |                       |
+  |       identity, payment }  |                            |                       |
   |<---------------------------|                            |                       |
 ```
 
@@ -98,7 +107,7 @@ Client                         BIP API                      B402                
 - `scheme`: `exact`
 - `asset`: USDT `0x55d398326f99059fF775485246999027B3197955`
 - `amount`: `5000000000000000000`
-- `payTo`: configured BIP treasury
+- `payTo`: **BIP multisig** (configured address)
 - Resource metadata: `agentId`, `role`, unique `paymentId` / nonce, expiry
 
 ### Success response (illustrative)
@@ -115,6 +124,7 @@ Client                         BIP API                      B402                
   "payment": {
     "asset": "USDT",
     "amount": "5",
+    "payTo": "0x_MULTISIG_TBD",
     "txHash": "0x...",
     "facilitator": "B402"
   },
@@ -135,7 +145,7 @@ Client                         BIP API                      B402                
 | Settlement | Idempotent settle; gas sponsored by facilitator |
 | Auth method | Prefer path returned by `/supported` for USDT (typically **Permit2** on BSC) |
 
-Config keys (names illustrative): `B402_BASE_URL`, `B402_API_KEY`, `BIP_PAY_TO`, `MEMBERSHIP_PRICE_ATOMIC=5000000000000000000`, `MEMBERSHIP_ASSET=0x55d398...`.
+Config keys (illustrative): `B402_BASE_URL`, `B402_API_KEY`, `BIP_PAY_TO=<multisig>`, `MEMBERSHIP_PRICE_ATOMIC=5000000000000000000`, `MEMBERSHIP_ASSET=0x55d398...`.
 
 Always refresh supported methods from B402 in production rather than assuming a fixed EIP-712 domain forever.
 
@@ -147,18 +157,19 @@ After B402 settle success:
 
 1. Persist ledger row: `paymentId`, `agentId`, `role`, `payer`, `txHash`, `status=settled`.
 2. Load ERC-8004 `ownerOf(agentId)`.
-3. Policy check (v1):
-   - Prefer: payer == agent owner **or** explicit operator allowlist later; **minimum**: registration is for this `agentId` only and agent exists.
-   - Document final rule: recommended **payer must be current agent owner** to reduce griefing.
-4. Relayer wallet (dedicated key, minimal BNB for gas) submits on-chain membership registration.
-   - Skeleton today: only agent owner can `register` — **contract must evolve** to either:
-     - `registerFor(agentId, owner)` callable by `RELAYER_ROLE` after off-chain payment proof, **or**
-     - temporary off-chain “paid allowlist” + user still calls `register` (not pure A).
-   - **Target for path A:** add `registerFor(uint256 agentId)` restricted to relayer role, still verifying `ownerOf` is recorded and events include registrant metadata; **do not deploy** until audited.
+3. Policy check (v1): recommended **payer must be current agent owner**; registration only for bound `agentId`.
+4. Relayer wallet (dedicated key, **not** a multisig signer required for routine register) submits on-chain registration.
+   - Target: `registerFor(uint256 agentId)` with `RELAYER_ROLE` — **audit before deploy**.
 5. On success: `status=registered`, return 200.
-6. On failure: enter **refund procedure** (§7).
+6. On failure: **refund procedure** (§7).
 
-Relayer key: hardware/KMS where possible; no shared use with treasury `payTo`.
+Key separation:
+
+| Key / address | Role |
+|---------------|------|
+| Multisig `payTo` | Receive 5 USDT membership fees |
+| Relayer EOA/KMS | Gas + `registerFor` only |
+| B402 API secret | Backend only |
 
 ---
 
@@ -168,8 +179,8 @@ Relayer key: hardware/KMS where possible; no shared use with treasury `payTo`.
 
 - Validate `agentId` + `role`.
 - Optional: reject if already active member.
-- **Pre-check** `activeMemberCount < 4444` (best effort); on-chain remains source of truth.
-- Issue requirements with fixed 5 USDT and bound `agentId`/`role`.
+- **Pre-check** `activeMemberCount < 4444`.
+- Issue requirements with fixed 5 USDT and **multisig payTo**.
 
 ### On PAYMENT-SIGNATURE
 
@@ -190,35 +201,22 @@ Relayer key: hardware/KMS where possible; no shared use with treasury `payTo`.
 
 ## 7. Refund policy (locked: Yes)
 
-If **USDT settle succeeds** but **membership registration cannot complete**, BIP **must** refund.
+If **USDT settle succeeds** but **membership registration cannot complete**, BIP **must** refund **5 USDT** to the **payer** from the settlement record.
 
 ### Triggers
 
-- On-chain cap reached (race after pre-check)
-- `register` / `registerFor` reverts unexpectedly
-- Agent burned / invalid between settle and register
-- Relayer outage beyond timeout after settle (ops SLA)
+- Cap race, register revert, invalid agent mid-flight, relayer outage past SLA
 
 ### Procedure
 
-1. Mark ledger `status=refund_pending` with reason code.  
-2. **Do not** leave user without either membership or refund.  
-3. Refund **5 USDT** to **payer** address from settlement record (not a different address supplied later).  
-4. Prefer automated ERC-20 transfer from treasury hot wallet with limits; else manual multisig within published SLA (e.g. 48h).  
-5. Mark `status=refunded` + refund `txHash`.  
-6. Alert ops.  
+1. `status=refund_pending` + reason.  
+2. Refund from policy-approved wallet (limited hot wallet **or** multisig outbound).  
+3. `status=refunded` + refund `txHash`.  
+4. Alert ops.
 
-### Non-refund cases
+### Non-refund
 
-- Verify/settle never succeeded  
-- User error before settle (wrong signature rejected)  
-- Successful membership (no refund)
-
-### Cap race mitigation
-
-- Pre-check count before settle  
-- Serialize relayer registrations  
-- Refund remaining edge cases per above
+- Never settled; user error before settle; membership already active
 
 ---
 
@@ -226,43 +224,32 @@ If **USDT settle succeeds** but **membership registration cannot complete**, BIP
 
 | # | Case | Expected |
 |---|------|----------|
-| 1 | Expired authorization | Reject; no membership |
-| 2 | Wrong network | Reject |
-| 3 | Wrong asset (not USDT) | Reject |
-| 4 | Wrong payTo | Reject |
-| 5 | Amount ≠ 5 USDT atomic | Reject |
-| 6 | Replay payment id | No double charge / double membership |
-| 7 | Duplicate agentId membership | Reject |
-| 8 | Verify OK, settle fails | No membership |
-| 9 | Claim paid, no settle record | Reject |
-| 10 | Payment bound to agentId X used for Y | Reject |
-| 11 | Cap 4444 | No new membership; refund if settled |
-| 12 | Missing B402 credentials | Fail closed |
+| 1–12 | See prior suite (expiry, wrong chain/asset/amount/payTo, replay, cap, etc.) | Reject / no membership |
 | 13 | Missing/invalid `role` | 400 before 402 |
-| 14 | Settle OK, register fails | `refund_pending` → refund 5 USDT |
+| 14 | Settle OK, register fails | Refund 5 USDT |
+| 15 | Client-supplied payTo ≠ multisig | Reject |
 
 ---
 
 ## 9. Privacy & security
 
 - No seed phrases / private keys from operators.  
-- B402 secrets + relayer key + treasury controls server-side only.  
+- Multisig, relayer, and B402 secrets separated.  
 - Rate-limit register and 402 issuance.  
-- `role` is public metadata, not auth secret.  
 - Official domain only in payment UX.
 
 ---
 
 ## 10. Implementation checklist
 
-- [ ] B402 adapter (`supported` / `verify` / `settle`)  
-- [ ] Config: 5 USDT atomic, USDT address, payTo, B402 creds  
-- [ ] `POST /v1/membership/register` with `agentId` + `role`  
-- [ ] Payment ledger + unique constraints  
-- [ ] Relayer path + contract `registerFor` / role (audit before deploy)  
+- [ ] Deploy/configure **BSC multisig** → set `BIP_PAY_TO`  
+- [ ] B402 adapter + credentials  
+- [ ] `POST /v1/membership/register` (`agentId` + `role`)  
+- [ ] Payment ledger  
+- [ ] Relayer + `registerFor` (audited)  
 - [ ] Refund worker + runbook  
-- [ ] Negative tests §8  
-- [ ] Testnet QA on `eip155:97` only with test credentials  
+- [ ] Negative tests  
+- [ ] Testnet QA only on `eip155:97` with test payTo  
 
 ---
 
@@ -270,7 +257,7 @@ If **USDT settle succeeds** but **membership registration cannot complete**, BIP
 
 - B402 / Binance x402 on BSC  
 - USDT BSC: `0x55d398326f99059fF775485246999027B3197955`  
-- ERC-8004 Identity proxy: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`  
+- ERC-8004 Identity: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`  
 - `docs/MEMBERSHIP_CONTROLLER.md`, `docs/SECURITY.md`, `docs/AUDIT_GATES.md`  
 
-**Security-first:** decisions locked for design; no mainnet payments until implementation, tests, and remaining audit gates pass.
+**Security-first:** design locked including multisig payTo; no mainnet payments until address is set, implementation tested, and audit gates pass.
