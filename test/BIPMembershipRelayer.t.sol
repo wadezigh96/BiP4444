@@ -146,6 +146,14 @@ contract BIPMembershipRelayerTest is Test {
         controller.registerFor(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline, signature);
     }
 
+    function test_RegisterFor_RejectsSignatureWithExcessiveLifetime() public {
+        uint256 deadline = block.timestamp + 2 days;
+        bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
+        vm.prank(relayer);
+        vm.expectRevert(BIPMembershipController.SignatureLifetimeTooLong.selector);
+        controller.registerFor(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline, signature);
+    }
+
     function test_RegisterFor_BindsSignatureToRole() public {
         uint256 deadline = block.timestamp + 1 days;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
