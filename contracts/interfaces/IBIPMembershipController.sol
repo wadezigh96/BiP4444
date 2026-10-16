@@ -15,7 +15,16 @@ interface IBIPMembershipController {
         returns (uint256 membershipId, address registeredBy, uint64 registeredAt, bool active);
 
     function register(uint256 agentId) external;
-    function registerFor(uint256 agentId) external;
+
+    /// @notice Relayer registration requires an ERC-712 owner authorization bound to payment and role.
+    function registerFor(
+        uint256 agentId,
+        bytes32 paymentIdHash,
+        bytes32 roleHash,
+        uint256 deadline,
+        bytes calldata ownerSignature
+    ) external;
+
     function setRelayer(address relayer, bool enabled) external;
     function revoke(uint256 agentId) external;
     function pause() external;
