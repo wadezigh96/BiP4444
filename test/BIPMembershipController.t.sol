@@ -306,13 +306,15 @@ contract BIPMembershipControllerTest is Test {
         controller.revoke(AGENT_ALICE);
     }
 
-    function test_Revoke_RevertsWhenPaused() public {
+    function test_Revoke_IsAllowedWhenPaused() public {
         _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("revoke-paused-payment"));
         vm.prank(admin);
         controller.pause();
         vm.prank(admin);
-        vm.expectRevert(BIPMembershipController.PausedError.selector);
         controller.revoke(AGENT_ALICE);
+        assertFalse(controller.isMember(AGENT_ALICE));
+        assertEq(controller.activeMemberCount(), 0);
+        assertTrue(controller.paused());
     }
 
     function test_Pause_OnlyOwner() public {
