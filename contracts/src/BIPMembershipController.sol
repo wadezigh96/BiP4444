@@ -45,6 +45,7 @@ contract BIPMembershipController is IBIPMembershipController {
     error NotOwner();
     error NotPendingOwner();
     error NotRelayer();
+    error NotAgentOwner();
     error PausedError();
     error NotPausedError();
     error CapReached();
