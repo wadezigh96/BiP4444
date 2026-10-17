@@ -62,7 +62,7 @@ contract MembershipInvariantHandler {
     }
 }
 
-contract BIPMembershipInvariantTest is StdInvariant {
+contract BIPMembershipInvariantTest is StdInvariant, Test {
     BIPMembershipController internal controller;
     MockERC8004Identity internal identity;
     MembershipInvariantHandler internal handler;
