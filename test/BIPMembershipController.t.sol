@@ -24,7 +24,7 @@ contract BIPMembershipControllerTest is Test {
     uint256 internal constant AGENT_CHARLIE = 1003;
     bytes32 internal constant ROLE_HASH = keccak256("test-role");
 
-    event MembershipRegistered(uint256 indexed agentId, uint256 indexed membershipId, address indexed registrant);
+    event MembershipRegistered(uint256 indexed agentId, uint256 indexed membershipId, address indexed registrant, address identityOwner, bytes32 paymentIdHash, bytes32 roleHash);
     event MembershipRevoked(uint256 indexed agentId, uint256 indexed membershipId, address indexed by);
     event Paused(address account);
     event Unpaused(address account);
@@ -101,7 +101,7 @@ contract BIPMembershipControllerTest is Test {
 
         vm.prank(relayer);
         vm.expectEmit(true, true, true, true);
-        emit MembershipRegistered(AGENT_ALICE, 1, relayer);
+        emit MembershipRegistered(AGENT_ALICE, 1, relayer, alice, keccak256("alice-payment-1"), ROLE_HASH);
         controller.registerFor(AGENT_ALICE, paymentHash, ROLE_HASH, deadline, signature);
 
         assertTrue(controller.isMember(AGENT_ALICE));
@@ -223,6 +223,63 @@ contract BIPMembershipControllerTest is Test {
         assertEq(controller.activeMemberCount(), 1);
         (uint256 membershipId,,,) = controller.membershipOf(AGENT_ALICE);
         assertEq(membershipId, 2);
+    }
+
+    function test_RevokeSelf_OnlyCurrentIdentityOwnerCanRevoke() public {
+        bytes32 paymentHash = keccak256("self-revoke-payment");
+        _registerAgent(AGENT_ALICE, ALICE_PK, paymentHash);
+
+        vm.prank(charlie);
+        vm.expectRevert(BIPMembershipController.NotAgentOwner.selector);
+        controller.revokeSelf(AGENT_ALICE);
+
+        // Ownership follows the ERC-8004 agentId, so the new owner can revoke.
+        identity.setOwner(AGENT_ALICE, bob);
+        assertTrue(controller.isMember(AGENT_ALICE));
+
+        vm.prank(bob);
+        controller.revokeSelf(AGENT_ALICE);
+        assertFalse(controller.isMember(AGENT_ALICE));
+        assertEq(controller.activeMemberCount(), 0);
+    }
+
+    function test_RevokeSelf_IsAllowedWhilePaused() public {
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("self-revoke-paused"));
+        vm.prank(admin);
+        controller.pause();
+
+        vm.prank(alice);
+        controller.revokeSelf(AGENT_ALICE);
+        assertFalse(controller.isMember(AGENT_ALICE));
+        assertEq(controller.activeMemberCount(), 0);
+        assertTrue(controller.paused());
+    }
+
+    function test_AdminRevoke_IsAllowedWhilePaused() public {
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("admin-revoke-paused"));
+        vm.prank(admin);
+        controller.pause();
+
+        vm.prank(admin);
+        controller.revoke(AGENT_ALICE);
+        assertFalse(controller.isMember(AGENT_ALICE));
+        assertEq(controller.activeMemberCount(), 0);
+        assertTrue(controller.paused());
+    }
+
+    function test_ReactivationRequiresFreshPaymentAndGetsNewMembershipId() public {
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("reactivation-payment-1"));
+        (uint256 firstId,,,) = controller.membershipOf(AGENT_ALICE);
+        assertEq(firstId, 1);
+
+        vm.prank(admin);
+        controller.revoke(AGENT_ALICE);
+
+        _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("reactivation-payment-2"));
+        (uint256 secondId,,, bool active) = controller.membershipOf(AGENT_ALICE);
+        assertEq(secondId, 2);
+        assertTrue(active);
+        assertEq(controller.activeMemberCount(), 1);
     }
 
     function test_Revoke_OnlyOwner() public {
