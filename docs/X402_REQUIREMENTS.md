@@ -7,7 +7,7 @@
 
 ---
 
-## 0. Locked product decisions (updated 2026-10-17; supersedes the earlier 5 USDT draft)
+## 0. Locked product decisions (updated 2026-10-17; supersedes the earlier 4 USDT draft)
 
 | Decision | Choice |
 |----------|--------|
@@ -22,7 +22,7 @@
 | **Role** | Client supplies a **role** string at registration |
 | **Refund if settle OK but register fails** | **Yes** — see §7 |
 
-Still open: B402 API credentials; relayer key; on-chain `role` later. The approved price is 4 USDT; earlier 5 USDT references in historical evidence are superseded.
+Still open: B402 API credentials; relayer key; on-chain `role` later. The approved price is 4 USDT; earlier 4 USDT references in historical evidence are superseded.
 
 ### payTo — Safe verification (BSC mainnet, 2026-10-16)
 
@@ -60,7 +60,7 @@ Use **x402 (v2)** + **B402** so an agent operator can pay **4 USDT** to the **Sa
 ## 2. Protocol flow
 
 ```
-Client → 402 (5 USDT → Safe 0xFf2659…373c) → B402 settle → relayer registerFor → 200
+Client → 402 (4 USDT → Safe 0xFf2659…373c) → B402 settle → relayer registerFor → 200
 ```
 
 Headers: `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`.
@@ -69,7 +69,7 @@ Headers: `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`.
 
 ## 3. Registration (`agentId` + `role`)
 
-402 binds: `eip155:56`, USDT, `5000000000000000000`, **payTo `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`**, resource metadata with agentId + role.
+402 binds: `eip155:56`, USDT, `4000000000000000000`, **payTo `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`**, resource metadata with agentId + role.
 
 ---
 
@@ -83,7 +83,7 @@ Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typical
 
 | Address / key | Role |
 |---------------|------|
-| Safe `0xFf2659…373c` | Receive 5 USDT |
+| Safe `0xFf2659…373c` | Receive 4 USDT |
 | Relayer KMS/EOA | Gas + `registerFor` only |
 | B402 secret | Backend only |
 
@@ -91,7 +91,7 @@ Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typical
 
 ## 6–8. Rules, refund, tests
 
-Idempotent paymentId; refund 5 USDT to **payer** if settle OK but register fails; reject wrong payTo (must equal Safe above).
+Idempotent paymentId; refund 4 USDT to **payer** if settle OK but register fails; reject wrong payTo (must equal Safe above).
 
 ---
 
