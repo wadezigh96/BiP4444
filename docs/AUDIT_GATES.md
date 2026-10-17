@@ -6,10 +6,13 @@
 ## Gates
 
 - [ ] **Repository and dependency review**  
-  Re-run when production dependencies and full implementation are added.
+  Re-run when production dependencies and full implementation are added; current contract static scan is recorded separately.
 
 - [x] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
+
+- [x] **Slither static analysis (current contract source)**  
+  Evidence: `docs/evidence/SLITHER_2026-10-17.md`. Slither 0.11.3 reported four informational findings: deadline timestamp comparisons (intentional expiry checks), narrowly scoped signature-decoding assembly, and the uppercase `MAX_MEMBERS()` getter naming convention. No high/medium detector finding appeared in the report. Re-run against the exact release commit and retain independent review.
 
 - [ ] **Phase 1 Foundry suite (policy branch)**  
   The previous 39-test run is evidence for an earlier commit only. This branch adds self-revoke, revoke-during-pause, ownership-follow, complete membership events, reactivation, and stateful invariants. Keep open until the new CI run passes and evidence is recorded.
@@ -46,6 +49,7 @@
 | Historical membership tests | `docs/evidence/FOUNDRY_TESTS_2026-10-16.md` |
 | Previous-branch Foundry CI (not this policy branch) | `docs/evidence/FOUNDRY_CI_2026-10-17.md` |
 | Phase 1 policy decision record | `docs/DECISIONS_PHASE_0_2026-10-17.md` |
+| Slither static analysis | `docs/evidence/SLITHER_2026-10-17.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 | payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
 | x402 | Design `docs/X402_REQUIREMENTS.md`; API contract `docs/API_REGISTER.md` |
