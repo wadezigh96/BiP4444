@@ -16,14 +16,18 @@ Provide an on-chain membership layer that:
 - Protects administrator functions and defines an emergency procedure.
 - Supports **payment-gated registration** via backend relayer after B402 settle (path A).
 
-## Locked related product decisions
+## Approved policy decisions
 
-See `docs/X402_REQUIREMENTS.md` §0:
+See `docs/DECISIONS_PHASE_0_2026-10-17.md` and `docs/X402_REQUIREMENTS.md`:
 
-- Price: **4 USDT** via **B402**
-- Register path: **A (backend relayer)** after settle
-- Off-chain **role** string at registration (identity = ERC-8004 `agentId`)
-- Refund if settle succeeds but register fails
+- Price: **4 USDT** exact via **B402** (atomic amount `4000000000000000000`)
+- Register path: **A (backend relayer)** after verified settlement
+- Role remains off-chain in v1; identity is the existing ERC-8004 `agentId`
+- Refund the verified payer if settlement succeeds but registration definitively fails
+- Admin and current identity owner can revoke, including while paused
+- Membership follows `agentId`; reactivation requires a new payment and gets a new membership ID
+- Cap is 4,444 active memberships
+- Multiple allowlisted relayers; administration should be controlled by the Safe 2-of-2
 
 ## Key design decisions
 
