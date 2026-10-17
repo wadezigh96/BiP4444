@@ -25,10 +25,18 @@ interface IBIPMembershipController {
 
     function setRelayer(address relayer, bool enabled) external;
     function revoke(uint256 agentId) external;
+    function revokeSelf(uint256 agentId) external;
     function pause() external;
     function unpause() external;
 
-    event MembershipRegistered(uint256 indexed agentId, uint256 indexed membershipId, address indexed registrant);
+    event MembershipRegistered(
+        uint256 indexed agentId,
+        uint256 indexed membershipId,
+        address indexed registrant,
+        address identityOwner,
+        bytes32 paymentIdHash,
+        bytes32 roleHash
+    );
     event MembershipRevoked(uint256 indexed agentId, uint256 indexed membershipId, address indexed by);
     event RelayerUpdated(address indexed relayer, bool enabled);
     event Paused(address account);
