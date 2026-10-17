@@ -237,6 +237,10 @@ contract BIPMembershipControllerTest is Test {
         identity.setOwner(AGENT_ALICE, bob);
         assertTrue(controller.isMember(AGENT_ALICE));
 
+        vm.prank(alice);
+        vm.expectRevert(BIPMembershipController.NotAgentOwner.selector);
+        controller.revokeSelf(AGENT_ALICE);
+
         vm.prank(bob);
         controller.revokeSelf(AGENT_ALICE);
         assertFalse(controller.isMember(AGENT_ALICE));
