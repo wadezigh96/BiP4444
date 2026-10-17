@@ -54,7 +54,7 @@ Example body (illustrative application fields; the actual x402 header must follo
     "version": 2,
     "network": "eip155:56",
     "asset": "0x55d398326f99059fF775485246999027B3197955",
-    "amount": "5000000000000000000",
+    "amount": "4000000000000000000",
     "payTo": "0xFf265912c76342c8469cE18aB9DF0B2f37d9373c",
     "resource": "/v1/membership/register"
   }
@@ -75,7 +75,7 @@ Failure branches:
 - `PAYMENT_REJECTED`: verification failed; do not settle, register, or refund an un-settled payment.
 - `SETTLEMENT_UNKNOWN`: timeout/ambiguous result; reconcile with B402 by stable facilitator reference before retrying settlement. Never blindly settle twice.
 - `SETTLEMENT_FAILED`: no membership; preserve redacted evidence and allow safe retry only according to B402 idempotency semantics.
-- `REGISTRATION_FAILED_REFUND_PENDING`: settlement succeeded but registration definitively failed; enqueue exactly one refund to the verified payer for 5 USDT and alert operations.
+- `REGISTRATION_FAILED_REFUND_PENDING`: settlement succeeded but registration definitively failed; enqueue exactly one refund to the verified payer for 4 USDT and alert operations.
 - `REFUND_PENDING → REFUNDED` or `REFUND_FAILED_MANUAL_REVIEW`: retry only with provider-supported idempotency/reconciliation; do not send a second refund because of a timeout.
 - `REGISTERED`: terminal success for that paymentId. Replays return the same result and MUST NOT create a second membership.
 
@@ -129,7 +129,7 @@ Return HTTP `200 OK` only after settlement is confirmed and the on-chain registr
   "payment": {
     "status": "settled",
     "asset": "0x55d398326f99059fF775485246999027B3197955",
-    "amount": "5000000000000000000",
+    "amount": "4000000000000000000",
     "payTo": "0xFf265912c76342c8469cE18aB9DF0B2f37d9373c"
   }
 }
@@ -184,7 +184,7 @@ Use DB transactions for state transitions and uniqueness. Encrypt sensitive oper
 
 ## 8. Refund runbook contract
 
-A refund is eligible only when B402 settlement is confirmed and registration has definitively failed (not merely timed out). Refund exactly 5 USDT to the verified original payer, never to a client-provided destination. A single durable refund job per settled payment is required. Reconcile ambiguous refund outcomes with B402 before retrying. If the facilitator cannot refund directly, document and require Safe 2-of-2 approval; never let a relayer key unilaterally move Safe funds.
+A refund is eligible only when B402 settlement is confirmed and registration has definitively failed (not merely timed out). Refund exactly 4 USDT to the verified original payer, never to a client-provided destination. A single durable refund job per settled payment is required. Reconcile ambiguous refund outcomes with B402 before retrying. If the facilitator cannot refund directly, document and require Safe 2-of-2 approval; never let a relayer key unilaterally move Safe funds.
 
 ## 9. Required negative/integration tests
 
