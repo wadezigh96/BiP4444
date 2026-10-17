@@ -56,6 +56,7 @@
 | Previous-branch Foundry CI (not this policy branch) | `docs/evidence/FOUNDRY_CI_2026-10-17.md` |
 | Phase 1 Foundry CI | `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md` |
 | Phase 1 policy decision record | `docs/DECISIONS_PHASE_0_2026-10-17.md` |
+| Phase 1 Foundry CI | `docs/evidence/FOUNDRY_PHASE1_CI_2026-10-17.md` |
 | Slither static analysis | `docs/evidence/SLITHER_2026-10-17.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 | payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
