@@ -1,0 +1,62 @@
+name: Foundry tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "audit/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  forge-test:
+    name: forge test (local only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install pinned forge-std dependency
+        run: forge install foundry-rs/forge-std@v1.9.7 --no-git
+
+      - name: Run unit tests
+        run: forge test -vvv
+
+  slither:
+    name: Slither static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Install pinned forge-std dependency
+        run: forge install foundry-rs/forge-std@v1.9.7 --no-git
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Slither
+        run: python -m pip install slither-analyzer==0.11.3
+      - name: Run Slither
+        run: |
+          set -o pipefail
+          slither . --compile-force-framework foundry --fail-none 2>&1 | tee slither-report.txt
+      - name: Upload Slither report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slither-report
+          path: slither-report.txt
+          if-no-files-found: ignore

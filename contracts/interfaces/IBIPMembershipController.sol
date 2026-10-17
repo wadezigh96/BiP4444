@@ -2,45 +2,43 @@
 pragma solidity ^0.8.24;
 
 /// @title IBIPMembershipController
-/// @notice Interface for BIP4444 membership controller (design sketch only).
-/// @dev This is a planning artifact. Do not deploy until audit gates are complete.
+/// @notice Interface for BIP4444 membership controller (pre-audit implementation).
+/// @dev Do not deploy until all gates in docs/AUDIT_GATES.md pass.
 interface IBIPMembershipController {
     function MAX_MEMBERS() external pure returns (uint256);
-
     function activeMemberCount() external view returns (uint256);
-
     function isMember(uint256 agentId) external view returns (bool);
 
     function membershipOf(uint256 agentId)
         external
         view
-        returns (
-            uint256 membershipId,
-            address registeredBy,
-            uint64 registeredAt,
-            bool active
-        );
+        returns (uint256 membershipId, address registeredBy, uint64 registeredAt, bool active);
 
-    function register(uint256 agentId) external;
+    /// @notice Relayer registration requires an EIP-712 owner authorization bound to payment and role.
+    function registerFor(
+        uint256 agentId,
+        bytes32 paymentIdHash,
+        bytes32 roleHash,
+        uint256 deadline,
+        bytes calldata ownerSignature
+    ) external;
 
+    function setRelayer(address relayer, bool enabled) external;
     function revoke(uint256 agentId) external;
-
+    function revokeSelf(uint256 agentId) external;
     function pause() external;
-
     function unpause() external;
 
     event MembershipRegistered(
         uint256 indexed agentId,
         uint256 indexed membershipId,
-        address indexed registrant
+        address indexed registrant,
+        address identityOwner,
+        bytes32 paymentIdHash,
+        bytes32 roleHash
     );
-
-    event MembershipRevoked(
-        uint256 indexed agentId,
-        uint256 indexed membershipId,
-        address indexed by
-    );
-
+    event MembershipRevoked(uint256 indexed agentId, uint256 indexed membershipId, address indexed by);
+    event RelayerUpdated(address indexed relayer, bool enabled);
     event Paused(address account);
     event Unpaused(address account);
 }
