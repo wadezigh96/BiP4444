@@ -130,7 +130,7 @@ contract BIPMembershipController is IBIPMembershipController {
         // ownership lookup above. Reverts in _register roll all changes back.
         ownerNonces[agentOwner] = nonce + 1;
         usedPaymentIds[paymentIdHash] = true;
-        _register(agentId, agentOwner, msg.sender);
+        _register(agentId, agentOwner, msg.sender, paymentIdHash, roleHash);
     }
 
     /// @notice EIP-712 digest helper for clients signing the relayer authorization.
@@ -167,7 +167,13 @@ contract BIPMembershipController is IBIPMembershipController {
         if (signer == address(0)) revert InvalidSignature();
     }
 
-    function _register(uint256 agentId, address agentOwner, address operator) internal {
+    function _register(
+        uint256 agentId,
+        address agentOwner,
+        address operator,
+        bytes32 paymentIdHash,
+        bytes32 roleHash
+    ) internal {
         Membership storage m = _memberships[agentId];
         if (m.active) revert AlreadyMember();
         if (_activeMemberCount >= _MAX_MEMBERS) revert CapReached();
@@ -180,7 +186,7 @@ contract BIPMembershipController is IBIPMembershipController {
         unchecked {
             _activeMemberCount += 1;
         }
-        emit MembershipRegistered(agentId, newId, operator);
+        emit MembershipRegistered(agentId, newId, operator, agentOwner, paymentIdHash, roleHash);
     }
 
     function setRelayer(address relayer, bool enabled) external override onlyOwner {
@@ -189,9 +195,22 @@ contract BIPMembershipController is IBIPMembershipController {
         emit RelayerUpdated(relayer, enabled);
     }
 
-    function revoke(uint256 agentId) external override onlyOwner whenNotPaused {
+    function revoke(uint256 agentId) external override onlyOwner {
         Membership storage m = _memberships[agentId];
         if (!m.active) revert NotMember();
+        m.active = false;
+        unchecked {
+            _activeMemberCount -= 1;
+        }
+        emit MembershipRevoked(agentId, m.membershipId, msg.sender);
+    }
+
+    /// @notice Allows the current ERC-8004 identity owner to revoke its active membership.
+    /// @dev Self-revocation remains available while paused as an owner-controlled exit path.
+    function revokeSelf(uint256 agentId) external override {
+        Membership storage m = _memberships[agentId];
+        if (!m.active) revert NotMember();
+        if (identityRegistry.ownerOf(agentId) != msg.sender) revert NotAgentOwner();
         m.active = false;
         unchecked {
             _activeMemberCount -= 1;
