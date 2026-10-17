@@ -9,7 +9,7 @@
 
 - The server is authoritative for the x402 payment terms. Clients MUST NOT choose or override network, asset, amount, `payTo`, facilitator, or settlement destination.
 - There is no free self-registration endpoint or public on-chain `register(agentId)` method. The membership controller's only registration path is the relayer call with valid EIP-712 owner consent, after B402 settlement has been confirmed.
-- Facilitator: B402. Price: exactly 5 USDT. Asset: `0x55d398326f99059fF775485246999027B3197955` (18 decimals). Atomic amount: `5000000000000000000`.
+- Facilitator: B402. Price: exactly 4 USDT. Asset: `0x55d398326f99059fF775485246999027B3197955` (18 decimals). Atomic amount: `4000000000000000000`.
 - The only allowed `payTo` is Safe `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`. Reject configuration drift at startup and fail closed; never fall back to an EOA or client-provided destination.
 - Identity is an existing ERC-8004 `agentId` on BSC identity registry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`. Resolve the current `ownerOf(agentId)` from chain before creating a payment requirement and again before registration. Do not trust a client-supplied owner.
 - Before relayer registration, require a fresh EIP-712 authorization signed by the current ERC-8004 owner. The signature binds `agentId`, `paymentIdHash`, canonical `roleHash`, owner nonce, deadline, chain ID, and controller address. The contract rejects expired signatures, signatures valid for more than 24 hours, reused payment hashes, and invalid signatures. A payment settlement alone is not owner consent.
@@ -46,7 +46,7 @@ Example body (illustrative application fields; the actual x402 header must follo
 {
   "error": {
     "code": "PAYMENT_REQUIRED",
-    "message": "Payment of 5 USDT is required to register this membership.",
+    "message": "Payment of 4 USDT is required to register this membership.",
     "retryable": true
   },
   "payment": {
