@@ -1,7 +1,7 @@
 # BIP4444 Audit and Release Gates
 
 **Policy:** The project is not production-ready until every gate below is completed and evidence is recorded. No mainnet deployment, live payment enablement, or mainnet transaction is authorized by this branch.  
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-19
 
 ## Gates
 
@@ -18,7 +18,7 @@
   Evidence: `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md`. CI passed 45 reported tests: 28 controller tests, 15 relayer tests, and the invariant/fork test harnesses. The stateful invariant suite ran 256 sequences / 128,000 handler calls with no reverts. The fork function skipped internally because `BSC_RPC_URL` was not configured; the live-fork gate remains open separately.
 
 - [ ] **Membership API implementation and persistent ledger**  
-  API contract drafted in `docs/API_REGISTER.md`. No production route, database-backed ledger, or runtime evidence is claimed yet.
+  A fail-closed scaffold now exists at `api/health.js` and `api/v1/membership/register.js`; `test/api-scaffold.test.js` covers input rejection and confirms valid registration attempts return 503 without payment or chain side effects. GitHub Actions run `39159164438` passed the API scaffold tests and Foundry suite. This is not a production payment API: B402, durable ledger, owner-consent flow, relayer calls, and refunds are not implemented.
 
 - [ ] **x402 facilitator and settlement verification**  
   Design locked (B402, 4 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Runtime evidence TBD. Verify current official B402 API/SDK documentation before implementing an adapter.
@@ -42,7 +42,7 @@
   B402/API settlement, payer-to-agent binding, idempotency, wrong amount/asset/chain/payTo, cap-full, and refund tests remain open. Alert Shield tests remain open.
 
 - [x] **Foundry CI dependency and reproducibility check (policy branch)**  
-  `forge-std` is pinned to v1.9.7 and the compiler to Solidity 0.8.24. GitHub Actions run `38986382170` passed both Foundry and Slither jobs. Rerun against the exact release commit.
+  `forge-std` is pinned to v1.9.7 and the compiler to Solidity 0.8.24. GitHub Actions run `39159164438` passed both API/Foundry tests and Slither on the current policy branch. Slither uses `--fail-none`, so a successful job is not proof of zero findings. Rerun and review the report against the exact release commit.
 
 - [ ] **Independent review of contracts and deployment configuration**
 
