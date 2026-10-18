@@ -159,7 +159,7 @@ contract BIPMembershipController is IBIPMembershipController {
 
     /// @notice Invalidates outstanding authorizations for this agent. Call before transferring the ERC-8004 identity.
     /// @dev ERC-8004 transfers do not notify this controller, so invalidation cannot be automatic.
-    function invalidateAuthorization(uint256 agentId) external {
+    function invalidateAuthorization(uint256 agentId) external override {
         if (identityRegistry.ownerOf(agentId) != msg.sender) revert NotCurrentAgentOwner();
         uint256 nextNonce = agentNonces[agentId] + 1;
         agentNonces[agentId] = nextNonce;
