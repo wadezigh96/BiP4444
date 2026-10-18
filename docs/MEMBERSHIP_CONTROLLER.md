@@ -55,12 +55,12 @@ See `docs/DECISIONS_PHASE_0_2026-10-17.md` and `docs/X402_REQUIREMENTS.md`:
 The prior public `register(agentId)` method has been removed because it allowed free registration and bypassed the required 4 USDT payment gate. Registration is now only through `registerFor(agentId, paymentIdHash, roleHash, deadline, ownerSignature)`.
 
 - `registerFor` is relayer-allowlisted and requires a valid EIP-712 signature from the current ERC-8004 owner.
-- The typed authorization binds `agentId`, a server-generated payment-operation hash, canonical role hash, per-owner nonce, deadline, chain ID, and controller address.
-- Signatures expire and may be valid for at most 24 hours; payment hashes cannot be consumed twice, including after revocation.
+- The typed authorization binds `agentId`, a server-generated payment-operation hash, canonical role hash, per-agent nonce, deadline, chain ID, and controller address. The controller accepts EOA ECDSA signatures and ERC-1271 contract-wallet signatures.
+- Signatures expire and may be valid for at most 24 hours; payment hashes cannot be consumed twice, including after revocation. The current ERC-8004 owner can call `invalidateAuthorization(agentId)` to invalidate pending signatures before transferring the identity.
 - Enforces pause, active membership cap, and duplicate-active-member checks.
 - Emits a complete `MembershipRegistered` event containing agent ID, new membership ID, operator, current identity owner, payment-operation hash, and role hash. Revocation events preserve the prior membership ID.
 - `revoke(agentId)` is admin-only and remains available while paused. `revokeSelf(agentId)` is available to the current ERC-8004 owner and also remains available while paused.
-- Membership status follows the `agentId` across ERC-8004 ownership changes. The new current owner can self-revoke; the previous owner cannot.
+- Membership status follows the `agentId` across ERC-8004 ownership changes. The new current owner can self-revoke; the previous owner cannot. ERC-8004 ownership transfers do not call this controller, so it cannot automatically detect a transfer-away-and-back between transactions. Invalidate pending authorizations before transferring; the residual timing risk remains a release-review item and must not be described as fully eliminated.
 - Reactivation requires a new payment-operation hash and owner authorization and receives a new monotonically increasing membership ID. The hard cap counts active memberships only; prior episodes remain auditable through events.
 - **Payment is not verified on-chain.** The backend must verify B402 settlement, bind it to the signed operation, use a durable ledger/idempotency constraints, and reconcile refunds. A compromised relayer can still lie about settlement; this remains a critical trust boundary.
 - Admin ownership transfer now uses a two-step pending-owner acceptance pattern. Production admin and relayer key custody still require independent review.
@@ -76,7 +76,7 @@ This is a pre-audit implementation; successful CI is required before treating th
 
 - Cap exactly at 4,444 active memberships; reject the 4,445th.
 - Duplicate active agentId rejected; reactivation requires a fresh payment hash and receives a new membership ID.
-- Relayer-only `registerFor` with current-owner EIP-712 authorization; no free registration selector.
+- Relayer-only `registerFor` with current-owner EIP-712 authorization; no free registration selector. Test EOA and ERC-1271 signatures, and verify `invalidateAuthorization` makes previously signed payloads unusable.
 - Admin revoke and owner self-revoke, including while paused.
 - Ownership-follow behavior and current-owner-only self-revoke.
 - Stateful invariants for count bounds and count/status consistency.
