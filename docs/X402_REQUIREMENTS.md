@@ -1,13 +1,13 @@
 # BIP4444 x402 Payment Design (BSC)
 
 **Status:** Design locked (pre-implementation)  
-**Last updated:** 2026-10-17  
+**Last updated:** 2026-10-19  
 **Network:** BNB Smart Chain mainnet — CAIP-2 `eip155:56`  
 **Policy:** No production payment flow and no membership grant until verify + settle succeed and negative tests pass.
 
 ---
 
-## 0. Locked product decisions (updated 2026-10-17; supersedes the earlier 4 USDT draft)
+## 0. Locked product decisions (updated 2026-10-17; current price is 4 USDT)
 
 | Decision | Choice |
 |----------|--------|
@@ -22,12 +22,12 @@
 | **Role** | Client supplies a **role** string at registration |
 | **Refund if settle OK but register fails** | **Yes** — see §7 |
 
-Still open: B402 API credentials; relayer key; on-chain `role` later. The approved price is 4 USDT; earlier 4 USDT references in historical evidence are superseded.
+The current approved price is **4 USDT**. Any older draft reference to 5 USDT is obsolete. This document is a design specification; the API scaffold currently fails closed and does not request or process payments.
 
 ### payTo — Safe verification (BSC mainnet, 2026-10-16)
 
 | Field | Value |
-|-------|--------|
+|-------|-------|
 | Address | `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c` |
 | Chain ID | 56 |
 | Block | ~127884052 |
@@ -51,7 +51,7 @@ Relayer key must **not** be required as the only means to move funds; threshold 
 
 ## 1. Goal
 
-Use **x402 (v2)** + **B402** so an agent operator can pay **4 USDT** to the **Safe** `payTo` for BIP membership bound to ERC-8004 identity + **role**, without BIP holding user private keys.
+Use **x402 (v2)** + **B402** so an agent operator can pay **4 USDT** to the Safe `payTo` for BIP membership bound to ERC-8004 identity + **role**, without BIP holding user private keys.
 
 **Hard rule:** Membership only after B402 verify + settle and relayer registration (or refund).
 
@@ -75,7 +75,7 @@ Headers: `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`.
 
 ## 4. B402
 
-Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typically Permit2.
+Backend-only secrets. Verify current official B402 documentation and pin the actual SDK/API version before implementing `supported` → `verify` → `settle`. USDT on BSC may use Permit2 depending on the supported scheme; confirm from official docs rather than assuming.
 
 ---
 
@@ -91,22 +91,23 @@ Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typical
 
 ## 6–8. Rules, refund, tests
 
-Idempotent paymentId; refund 4 USDT to **payer** if settle OK but register fails; reject wrong payTo (must equal Safe above).
+Idempotent payment operation; refund exactly 4 USDT to the verified payer if settlement succeeds but registration definitively fails. Refund and settlement retries must reconcile ambiguous provider outcomes and must never produce duplicate operations.
 
 ---
 
 ## 9. Checklist
 
-- [x] Multisig Safe deployed & verified on BSC  
-- [x] `BIP_PAY_TO` set to Safe  
-- [ ] B402 credentials  
-- [ ] API + ledger + relayer + refund  
-- [ ] Negative tests + remaining audit gates  
+- [x] Multisig Safe deployed & verified on BSC (historical evidence recorded)
+- [x] Server-side price policy specified as 4 USDT
+- [ ] Official B402 docs/SDK version and canonical x402 v2 headers verified
+- [ ] B402 credentials safely configured
+- [ ] Production API + durable ledger + relayer + refund implemented and tested
+- [ ] Negative tests + remaining audit gates passed
 
 ---
 
 ## 10. References
 
-- payTo Safe: `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`  
-- USDT: `0x55d398326f99059fF775485246999027B3197955`  
-- ERC-8004: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`  
+- payTo Safe: `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`
+- USDT: `0x55d398326f99059fF775485246999027B3197955`
+- ERC-8004: `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`
