@@ -1,7 +1,8 @@
 # BIP4444 Audit and Release Gates
 
 **Policy:** The project is not production-ready until every gate below is completed and evidence is recorded. No mainnet deployment, live payment enablement, or mainnet transaction is authorized by this branch.  
-**Last updated:** 2026-10-19
+**Last updated:** 2026-10-19  
+**Deployment target:** BSC Mainnet only (`eip155:56`). No Testnet transactions are requested. Local mock tests and read-only Mainnet checks are allowed; live payment, deployment, and state-changing Mainnet transactions remain disabled until all release gates pass.
 
 ## Gates
 
@@ -21,7 +22,7 @@
   A fail-closed scaffold now exists at `api/health.js` and `api/v1/membership/register.js`; `test/api-scaffold.test.js` covers input rejection and confirms valid registration attempts return 503 without payment or chain side effects. GitHub Actions run `39159164438` passed the API scaffold tests and Foundry suite. This is not a production payment API: B402, durable ledger, owner-consent flow, relayer calls, and refunds are not implemented.
 
 - [ ] **x402 facilitator and settlement verification**  
-  Design locked (B402, 4 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Runtime evidence TBD. Verify current official B402 API/SDK documentation before implementing an adapter.
+  Design locked (B402, 4 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Official Binance B402 V2 Quick Start identifies `X-PAYMENT-REQUIREMENTS` for the seller's HTTP 402 response and the `/papi/v2/b402/verify` → `/papi/v2/b402/settle` flow. Buyer payment and success-response header schemas still require exact V2 API-reference confirmation; do not guess generic x402 header names. Runtime evidence TBD; adapter and production credentials remain unimplemented. No Testnet run is requested.
 
 - [ ] **Relayer registration security**  
   The public free `register(uint256)` method has been removed to close the payment bypass. The branch includes an allowlisted relayer path with EIP-712 owner consent bound to agent ID, payment-operation hash, role hash, nonce, deadline, chain ID, and controller address; it also enforces payment-hash replay protection and a maximum signature lifetime. The Phase 1 Solidity suite passed 45 reported tests in CI; see `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md`. B402 settlement is still an off-chain trust boundary; persistent ledger, verified payer/agent binding, key management, and independent review remain required.
@@ -39,7 +40,7 @@
   `test/BIPMembershipFork.t.sol` is implemented, but the CI run did not have `BSC_RPC_URL`; the test emitted a skip event and returned. Run locally with a read-only RPC and save a separate evidence file before closing this gate.
 
 - [ ] **Backend integration and negative payment tests**  
-  B402/API settlement, payer-to-agent binding, idempotency, wrong amount/asset/chain/payTo, cap-full, and refund tests remain open. Alert Shield tests remain open.
+  B402/API settlement, payer-to-agent binding, idempotency, wrong amount/asset/chain/payTo, cap-full, and refund tests remain open. Cover deterministic behavior with local mocks; separately use read-only Mainnet checks for chain/configuration facts. Do not send a Testnet transaction or any state-changing Mainnet transaction during this phase. Alert Shield tests remain open.
 
 - [x] **Foundry CI dependency and reproducibility check (policy branch)**  
   `forge-std` is pinned to v1.9.7 and the compiler to Solidity 0.8.24. GitHub Actions run `39159164438` passed both API/Foundry tests and Slither on the current policy branch. Slither uses `--fail-none`, so a successful job is not proof of zero findings. Rerun and review the report against the exact release commit.
