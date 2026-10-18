@@ -33,7 +33,7 @@ contract MembershipInvariantHandler {
         bytes32 paymentHash = keccak256(abi.encode("invariant-payment", ++_paymentSequence, agentId));
         uint256 deadline = block.timestamp + 1 hours;
         bytes32 digest = controller.authorizationDigest(
-            agentId, paymentHash, ROLE_HASH, controller.ownerNonces(agentOwner), deadline
+            agentId, paymentHash, ROLE_HASH, controller.agentNonces(agentId), deadline
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
