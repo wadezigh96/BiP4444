@@ -38,7 +38,7 @@ Validation:
 
 ## 3. Initial 402 response
 
-When the request is valid but payment has not been provided, return HTTP `402 Payment Required`. Construct the x402 v2 payment requirement from server-side constants and the verified B402-supported scheme. The response MUST use the standard `PAYMENT-REQUIRED` header and its protocol-defined encoding, and include a safe JSON body for clients that do not parse the header.
+When the request is valid but payment has not been provided, return HTTP `402 Payment Required`. Construct the x402 v2 payment requirement from server-side constants and the verified B402-supported scheme. For Binance B402 V2, use `X-PAYMENT-REQUIREMENTS` for the seller's HTTP 402 response and populate it from the current `/papi/v2/b402/supported` result, preserving the complete `kinds[].extra` object. Do not use generic x402 header names here. The buyer payment header and successful-response header remain unfinalized until the exact current Binance V2 API schema is reviewed.
 
 Example body (illustrative application fields; the actual x402 header must follow the selected B402/x402 SDK specification):
 
@@ -65,7 +65,7 @@ The JSON fields above are explanatory and do not substitute for the canonical x4
 
 ## 4. Payment retry and processing
 
-The client retries the same endpoint with the protocol-required `PAYMENT-SIGNATURE` header after obtaining user approval/signature. Do not accept payment data from a JSON body as a substitute for the required protocol header.
+The client retry/header contract is not finalized. Do not implement `PAYMENT-SIGNATURE` or any alternative buyer header by assumption; pin the exact buyer payment header and payload schema from Binance's current B402 V2 API reference before coding. Do not accept payment data from a JSON body as a substitute for the finalized protocol header.
 
 Server state machine, persisted transactionally:
 
@@ -114,7 +114,7 @@ Typed data:
 
 ## 5. Successful response
 
-Return HTTP `200 OK` only after settlement is confirmed and the on-chain registration is confirmed at the required confirmation policy. Include `PAYMENT-RESPONSE` using the selected x402 SDK's canonical format.
+Return HTTP `200 OK` only after settlement is confirmed and the on-chain registration is confirmed at the required confirmation policy. Include the successful-response payment header only after its exact Binance B402 V2 name and encoding are confirmed from the current API reference; do not assume `PAYMENT-RESPONSE`.
 
 ```json
 {
@@ -197,14 +197,14 @@ A refund is eligible only when B402 settlement is confirmed and registration has
 - Duplicate concurrent requests for the same paymentId or agentId create at most one membership.
 - Database restart/retry preserves state; secrets are absent from logs and responses.
 - Role validation, unknown fields, uint256 boundaries, rate limits, and unauthorized callers.
-- Assert that no test sends a real mainnet transaction; use mocks and local/testnet fixtures.
+- Assert that no test sends a real mainnet transaction; use mocks and local fixtures. The chosen deployment target is BSC Mainnet, and no Testnet run is requested. Local mocks do not prove live B402 settlement behavior.
 
 ## 10. Release blockers
 
 This API is **not production-ready** until:
 1. Official B402 API/SDK docs and supported x402 v2 header encoding are verified and pinned.
 2. Persistent database and transactional idempotency are implemented.
-3. B402 verify/settle/refund integration tests pass against mocks, then testnet/sandbox where available.
+3. B402 verify/settle/refund behavior is covered by deterministic local mocks and schema/contract tests; perform read-only Mainnet configuration checks separately. No Testnet transaction is authorized or requested. Before live payment enablement, require verified B402 production credentials/configuration, idempotency/reconciliation evidence, independent review, and explicit release approval.
 4. `registerFor` access control, relayer key management, cap and duplicate handling pass independent contract review.
 5. Alert/auth/privacy/rate-limit tests and all `docs/AUDIT_GATES.md` gates pass.
 6. Independent review and explicit release approval are recorded.
