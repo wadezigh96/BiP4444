@@ -13,6 +13,12 @@ contract BIPMembershipForkTest is Test {
     function testFork_ERC8004RegistryOwnerOfIsReadable() public {
         string memory rpcUrl = vm.envOr("BSC_RPC_URL", string(""));
         if (bytes(rpcUrl).length == 0) {
+            // Ordinary CI may run without secrets, but an explicitly required live-fork
+            // run must fail closed instead of being reported as a successful smoke test.
+            bool requireLiveFork = vm.envOr("BIP_REQUIRE_LIVE_FORK", false);
+            if (requireLiveFork) {
+                revert("BIP_REQUIRE_LIVE_FORK=1 requires BSC_RPC_URL");
+            }
             emit ForkTestSkipped("Set BSC_RPC_URL to execute the read-only BSC fork check.");
             return;
         }
