@@ -10,6 +10,7 @@ import {IERC8004Identity} from "../interfaces/IERC8004Identity.sol";
 contract BIPMembershipController is IBIPMembershipController {
     uint256 private constant _MAX_MEMBERS = 4444;
     uint256 public constant MAX_AUTHORIZATION_LIFETIME = 1 days;
+    bytes4 private constant _ERC1271_MAGICVALUE = 0x1626ba7e;
     uint256 private constant _SECP256K1N_HALF =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
@@ -33,6 +34,7 @@ contract BIPMembershipController is IBIPMembershipController {
     mapping(uint256 => Membership) private _memberships;
     mapping(address => bool) public isRelayer;
     mapping(address => uint256) public ownerNonces;
+    mapping(uint256 => uint256) public agentNonces;
     mapping(bytes32 => bool) public usedPaymentIds;
 
     uint256 private _nextMembershipId = 1;
@@ -58,6 +60,9 @@ contract BIPMembershipController is IBIPMembershipController {
     error SignatureExpired();
     error SignatureLifetimeTooLong();
     error PaymentIdAlreadyUsed();
+    error NotCurrentAgentOwner();
+
+    event AuthorizationInvalidated(uint256 indexed agentId, address indexed agentOwner, uint256 newNonce);
 
     event OwnershipTransferStarted(address indexed owner, address indexed pendingOwner);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -123,13 +128,14 @@ contract BIPMembershipController is IBIPMembershipController {
         if (usedPaymentIds[paymentIdHash]) revert PaymentIdAlreadyUsed();
 
         address agentOwner = identityRegistry.ownerOf(agentId);
-        uint256 nonce = ownerNonces[agentOwner];
+        uint256 nonce = agentNonces[agentId];
         bytes32 digest = authorizationDigest(agentId, paymentIdHash, roleHash, nonce, deadline);
-        if (_recoverSigner(digest, ownerSignature) != agentOwner) revert InvalidSignature();
+        if (!_isValidOwnerSignature(agentOwner, digest, ownerSignature)) revert InvalidSignature();
 
         // Checks-effects-interactions: no external calls follow these state changes except registry
         // ownership lookup above. Reverts in _register roll all changes back.
-        ownerNonces[agentOwner] = nonce + 1;
+        agentNonces[agentId] = nonce + 1;
+        ownerNonces[agentOwner] += 1; // Aggregate observability only; authorization nonce is per agent.
         usedPaymentIds[paymentIdHash] = true;
         _register(agentId, agentOwner, msg.sender, paymentIdHash, roleHash);
     }
@@ -149,6 +155,29 @@ contract BIPMembershipController is IBIPMembershipController {
             abi.encode(_AUTHORIZATION_TYPEHASH, agentId, paymentIdHash, roleHash, nonce, deadline)
         );
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+
+    /// @notice Invalidates outstanding authorizations for this agent. Call before transferring the ERC-8004 identity.
+    /// @dev ERC-8004 transfers do not notify this controller, so invalidation cannot be automatic.
+    function invalidateAuthorization(uint256 agentId) external {
+        if (identityRegistry.ownerOf(agentId) != msg.sender) revert NotCurrentAgentOwner();
+        uint256 nextNonce = agentNonces[agentId] + 1;
+        agentNonces[agentId] = nextNonce;
+        emit AuthorizationInvalidated(agentId, msg.sender, nextNonce);
+    }
+
+    function _isValidOwnerSignature(address signer, bytes32 digest, bytes calldata signature)
+        internal
+        view
+        returns (bool)
+    {
+        if (signer.code.length == 0) {
+            return _recoverSigner(digest, signature) == signer;
+        }
+        (bool ok, bytes memory result) = signer.staticcall(
+            abi.encodeWithSelector(_ERC1271_MAGICVALUE, digest, signature)
+        );
+        return ok && result.length >= 32 && abi.decode(result, (bytes4)) == _ERC1271_MAGICVALUE;
     }
 
     function _recoverSigner(bytes32 digest, bytes calldata signature) internal pure returns (address signer) {
