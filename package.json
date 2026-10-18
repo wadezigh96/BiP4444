@@ -2,8 +2,9 @@
   "name": "bip4444",
   "version": "0.0.1",
   "private": true,
-  "description": "BIP4444 — Binance Intelligence Passport (specification & security planning)",
+  "description": "BIP4444 — specification and security planning",
   "scripts": {
+    "test": "node --test test/api-scaffold.test.js",
     "verify:erc8004": "node scripts/verify-erc8004-bsc.js"
   },
   "devDependencies": {},
