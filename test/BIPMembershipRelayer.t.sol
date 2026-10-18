@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Test} from "forge-std/Test.sol";
 import {BIPMembershipController} from "../contracts/src/BIPMembershipController.sol";
 import {MockERC8004Identity} from "./mocks/MockERC8004Identity.sol";
+import {MockERC1271Wallet} from "./mocks/MockERC1271Wallet.sol";
 
 /// @dev These tests cover owner-consent signatures, not B402 payment settlement.
 contract BIPMembershipRelayerTest is Test {
@@ -72,6 +73,37 @@ contract BIPMembershipRelayerTest is Test {
         assertEq(id, 1);
         assertEq(registeredBy, alice);
         assertTrue(active);
+    }
+
+    function test_CurrentOwnerCanInvalidatePendingAuthorization() public {
+        uint256 deadline = block.timestamp + 1 days;
+        bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
+
+        vm.prank(alice);
+        controller.invalidateAuthorization(AGENT_ID);
+        assertEq(controller.agentNonces(AGENT_ID), 1);
+
+        vm.prank(relayer);
+        vm.expectRevert(BIPMembershipController.InvalidSignature.selector);
+        controller.registerFor(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline, signature);
+        assertFalse(controller.isMember(AGENT_ID));
+    }
+
+    function test_RegisterFor_SupportsERC1271Owner() public {
+        MockERC1271Wallet wallet = new MockERC1271Wallet();
+        identity.setOwner(AGENT_ID, address(wallet));
+
+        uint256 deadline = block.timestamp + 1 days;
+        bytes32 digest = controller.authorizationDigest(
+            AGENT_ID, PAYMENT_HASH, ROLE_HASH, controller.agentNonces(AGENT_ID), deadline
+        );
+        wallet.approveHash(digest);
+
+        vm.prank(relayer);
+        controller.registerFor(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline, hex"abcd");
+
+        assertTrue(controller.isMember(AGENT_ID));
+        assertEq(controller.activeMemberCount(), 1);
     }
 
     function test_RegisterFor_RevertsForNonRelayer() public {
