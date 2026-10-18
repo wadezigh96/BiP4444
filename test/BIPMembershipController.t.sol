@@ -55,7 +55,7 @@ contract BIPMembershipControllerTest is Test {
         uint256 deadline
     ) internal view returns (bytes memory) {
         bytes32 digest = controller.authorizationDigest(
-            agentId, paymentHash, roleHash, controller.ownerNonces(expectedOwner), deadline
+            agentId, paymentHash, roleHash, controller.agentNonces(agentId), deadline
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signingKey, digest);
         return abi.encodePacked(r, s, v);
