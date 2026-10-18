@@ -63,7 +63,7 @@ Use **x402 (v2)** + **B402** so an agent operator can pay **4 USDT** to the **Sa
 Client → 402 (4 USDT → Safe 0xFf2659…373c) → B402 settle → relayer registerFor → 200
 ```
 
-Headers: `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`.
+**Header contract is not finalized.** Binance's official B402 V2 Quick Start currently specifies `X-PAYMENT-REQUIREMENTS` for the seller's HTTP 402 response and the `/papi/v2/b402/verify` then `/papi/v2/b402/settle` flow. Do not implement generic x402 header names from memory; verify the exact buyer payment header and response header in the current V2 API reference before coding. Official reference: https://developers.binance.com/en/docs/products/onchainpay-x402/quick-start.
 
 ---
 
