@@ -23,6 +23,9 @@ interface IBIPMembershipController {
         bytes calldata ownerSignature
     ) external;
 
+    /// @notice Lets the current ERC-8004 owner invalidate pending signatures for this agent.
+    function invalidateAuthorization(uint256 agentId) external;
+
     function setRelayer(address relayer, bool enabled) external;
     function revoke(uint256 agentId) external;
     function revokeSelf(uint256 agentId) external;
