@@ -61,7 +61,7 @@ Example body (illustrative application fields; the actual x402 header must follo
 }
 ```
 
-The JSON fields above are explanatory and do not substitute for the canonical x402 `PAYMENT-REQUIRED` header. Never invent B402 header encoding or SDK fields; use the current official implementation.
+The JSON fields above are explanatory and do not substitute for the canonical B402 V2 `X-PAYMENT-REQUIREMENTS` header. Never invent B402 header encoding or SDK fields; use the current official implementation.
 
 ## 4. Payment retry and processing
 
@@ -109,7 +109,7 @@ Typed data:
 - Read the current owner nonce from the contract immediately before requesting the signature. A stale nonce must fail closed and require a new signature.
 - Deadline must be in the future and no more than 24 hours ahead. Prefer a shorter operational lifetime (for example, 10–15 minutes).
 - Backend must verify that B402's confirmed settled payment ID maps to this exact operation and that the payer/owner binding follows the product's authorization policy. Never infer payment identity from client JSON.
-- Call `registerFor(agentId, paymentIdHash, roleHash, deadline, ownerSignature)` only after settlement confirmation. The contract checks owner consent and marks the payment hash used. A contract success does **not** independently prove that B402 settled; the relayer and durable ledger remain critical trust boundaries.
+- Call `registerFor(agentId, paymentIdHash, roleHash, deadline, ownerSignature)` only after settlement confirmation. The contract checks owner consent and marks the payment hash used. The current contract recovers only EOA signatures via `ecrecover`; ERC-1271 smart-contract-wallet owners are not supported unless implemented and independently tested. A contract success does **not** independently prove that B402 settled; the relayer and durable ledger remain critical trust boundaries.
 - Persist the typed-data fields, signature-verification result, B402 settlement reference, and transaction hash with secrets/signatures redacted where possible. Do not log the raw signature.
 
 ## 5. Successful response
@@ -205,7 +205,7 @@ This API is **not production-ready** until:
 1. Official B402 API/SDK docs and supported x402 v2 header encoding are verified and pinned.
 2. Persistent database and transactional idempotency are implemented.
 3. B402 verify/settle/refund behavior is covered by deterministic local mocks and schema/contract tests; perform read-only Mainnet configuration checks separately. No Testnet transaction is authorized or requested. Before live payment enablement, require verified B402 production credentials/configuration, idempotency/reconciliation evidence, independent review, and explicit release approval.
-4. `registerFor` access control, relayer key management, cap and duplicate handling pass independent contract review.
+4. `registerFor` access control, EOA-only owner-signature limitation (or tested ERC-1271 support), relayer key management, cap and duplicate handling pass independent contract review.
 5. Alert/auth/privacy/rate-limit tests and all `docs/AUDIT_GATES.md` gates pass.
 6. Independent review and explicit release approval are recorded.
 
