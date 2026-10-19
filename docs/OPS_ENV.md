@@ -39,7 +39,7 @@
 | `NEXT_PUBLIC_PRIVY_APP_ID` | **public OK** | Privy App ID (client) |
 | `PRIVY_APP_SECRET` | **server only** | Privy secret — API routes / server only |
 
-### Chain / membership (when implemented)
+### Settlement safety gates (keep unset/false until every release gate passes)\n\n| Name | Public? | Purpose |\n|------|---------|---------|\n| `BIP_ENABLE_LIVE_SETTLEMENT` | server only | Must remain unset/false during development and audit |\n| `BIP_RELEASE_APPROVED` | server only | Explicit release switch; do not set until independent review and release approval are recorded |\n\n### Chain / membership (when implemented)
 
 | Name | Public? | Purpose |
 |------|---------|--------|
