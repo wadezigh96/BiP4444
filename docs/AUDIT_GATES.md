@@ -63,8 +63,8 @@
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 | payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
 | x402 | Design `docs/X402_REQUIREMENTS.md`; API contract `docs/API_REGISTER.md` |
-| Alert Shield | Design `docs/ALERT_SHIELD.md` |
+| Alert Shield | `docs/ALERT_SHIELD.md` and verifier tests |\n| Mainnet deployment checklist | `docs/MAINNET_DEPLOYMENT_CHECKLIST.md` |
 
 ## Security-first rule
 
-Do not modify production state, deploy contracts, enable live payment, or send mainnet transactions until all applicable implementation, security, testing, and independent-review gates pass and explicit release approval is recorded.
+Do not modify production state, deploy contracts, enable live payment, or send mainnet transactions until all applicable implementation, security, testing, and independent-review gates pass and explicit release approval is recorded. Follow `docs/MAINNET_DEPLOYMENT_CHECKLIST.md`; the controller's constructor owner is the deployer until the Safe accepts the two-step ownership transfer.
