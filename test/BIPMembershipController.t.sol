@@ -63,7 +63,7 @@ contract BIPMembershipControllerTest is Test {
 
     function _registerAgent(uint256 agentId, uint256 ownerKey, bytes32 paymentHash) internal {
         address agentOwner = vm.addr(ownerKey);
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(
             agentId, ownerKey, agentOwner, paymentHash, ROLE_HASH, deadline
         );
@@ -94,7 +94,7 @@ contract BIPMembershipControllerTest is Test {
 
     function test_RegisterFor_Success() public {
         bytes32 paymentHash = keccak256("alice-payment-1");
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(
             AGENT_ALICE, ALICE_PK, alice, paymentHash, ROLE_HASH, deadline
         );
@@ -133,7 +133,7 @@ contract BIPMembershipControllerTest is Test {
 
     function test_RegisterFor_RevertsOnZeroAgentId() public {
         bytes32 paymentHash = keccak256("zero-agent");
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(0, ALICE_PK, alice, paymentHash, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.ZeroAgentId.selector);
@@ -142,7 +142,7 @@ contract BIPMembershipControllerTest is Test {
 
     function test_RegisterFor_RevertsWhenSignatureIsNotFromIdentityOwner() public {
         bytes32 paymentHash = keccak256("wrong-signer");
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(
             AGENT_ALICE, BOB_PK, alice, paymentHash, ROLE_HASH, deadline
         );
@@ -154,7 +154,7 @@ contract BIPMembershipControllerTest is Test {
     function test_RegisterFor_RevertsOnDuplicateActiveMembership() public {
         _registerAgent(AGENT_ALICE, ALICE_PK, keccak256("alice-first-payment"));
         bytes32 anotherPayment = keccak256("alice-second-payment");
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(
             AGENT_ALICE, ALICE_PK, alice, anotherPayment, ROLE_HASH, deadline
         );
@@ -168,7 +168,7 @@ contract BIPMembershipControllerTest is Test {
         controller.pause();
 
         bytes32 paymentHash = keccak256("paused-payment");
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(
             AGENT_ALICE, ALICE_PK, alice, paymentHash, ROLE_HASH, deadline
         );
@@ -179,7 +179,7 @@ contract BIPMembershipControllerTest is Test {
 
     function test_RegisterFor_RevertsWhenAgentDoesNotExist() public {
         bytes32 paymentHash = keccak256("missing-agent");
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(9999, ALICE_PK, address(0), paymentHash, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(MockERC8004Identity.NonexistentAgent.selector);
@@ -200,7 +200,7 @@ contract BIPMembershipControllerTest is Test {
         uint256 overflowId = max + 1;
         identity.setOwner(overflowId, filler);
         bytes32 paymentHash = keccak256("cap-overflow-payment");
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(
             overflowId, FILLER_PK, filler, paymentHash, ROLE_HASH, deadline
         );
@@ -399,7 +399,7 @@ contract BIPMembershipControllerTest is Test {
 
         identity.setOwner(agentId, alice);
         bytes32 paymentHash = keccak256(abi.encode("fuzz-payment", agentId));
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _signature(
             agentId, wrongKey, alice, paymentHash, ROLE_HASH, deadline
         );
