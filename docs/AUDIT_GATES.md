@@ -63,7 +63,8 @@
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 | payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
 | x402 | Design `docs/X402_REQUIREMENTS.md`; API contract `docs/API_REGISTER.md` |
-| Alert Shield | `docs/ALERT_SHIELD.md` and verifier tests |\n| Mainnet deployment checklist | `docs/MAINNET_DEPLOYMENT_CHECKLIST.md` |
+| Alert Shield | `docs/ALERT_SHIELD.md` and verifier tests |
+| Mainnet deployment checklist | `docs/MAINNET_DEPLOYMENT_CHECKLIST.md` |
 
 ## Security-first rule
 
