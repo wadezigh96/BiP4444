@@ -58,7 +58,8 @@
 | Phase 1 Foundry CI | `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md` |
 | Phase 1 policy decision record | `docs/DECISIONS_PHASE_0_2026-10-17.md` |
 | Phase 1 Foundry CI | `docs/evidence/FOUNDRY_PHASE1_CI_2026-10-17.md` |
-| Historical Slither scan | `docs/evidence/SLITHER_2026-10-17.md` |\n| Current Slither scan | `docs/evidence/SLITHER_2026-10-19.md` |
+| Historical Slither scan | `docs/evidence/SLITHER_2026-10-17.md` |
+| Current Slither scan | `docs/evidence/SLITHER_2026-10-19.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 | payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
 | x402 | Design `docs/X402_REQUIREMENTS.md`; API contract `docs/API_REGISTER.md` |
