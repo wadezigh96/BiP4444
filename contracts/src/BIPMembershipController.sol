@@ -9,7 +9,7 @@ import {IERC8004Identity} from "../interfaces/IERC8004Identity.sol";
 /// @dev Pre-audit implementation. Never deploy to mainnet until all release gates pass.
 contract BIPMembershipController is IBIPMembershipController {
     uint256 private constant _MAX_MEMBERS = 4444;
-    uint256 public constant MAX_AUTHORIZATION_LIFETIME = 1 days;
+    uint256 public constant MAX_AUTHORIZATION_LIFETIME = 15 minutes;
     bytes4 private constant _ERC1271_MAGICVALUE = 0x1626ba7e;
     uint256 private constant _SECP256K1N_HALF =
         0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
