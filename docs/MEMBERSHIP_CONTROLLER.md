@@ -56,7 +56,7 @@ The prior public `register(agentId)` method has been removed because it allowed 
 
 - `registerFor` is relayer-allowlisted and requires a valid EIP-712 signature from the current ERC-8004 owner.
 - The typed authorization binds `agentId`, a server-generated payment-operation hash, canonical role hash, per-agent nonce, deadline, chain ID, and controller address. The controller accepts EOA ECDSA signatures and ERC-1271 contract-wallet signatures.
-- Signatures expire and may be valid for at most 24 hours; payment hashes cannot be consumed twice, including after revocation. The current ERC-8004 owner can call `invalidateAuthorization(agentId)` to invalidate pending signatures before transferring the identity.
+- Signatures expire and may be valid for at most 15 minutes; payment hashes cannot be consumed twice, including after revocation. The current ERC-8004 owner can call `invalidateAuthorization(agentId)` to invalidate pending signatures before transferring the identity.
 - Enforces pause, active membership cap, and duplicate-active-member checks.
 - Emits a complete `MembershipRegistered` event containing agent ID, new membership ID, operator, current identity owner, payment-operation hash, and role hash. Revocation events preserve the prior membership ID.
 - `revoke(agentId)` is admin-only and remains available while paused. `revokeSelf(agentId)` is available to the current ERC-8004 owner and also remains available while paused.
