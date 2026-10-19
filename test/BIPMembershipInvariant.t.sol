@@ -31,7 +31,7 @@ contract MembershipInvariantHandler {
         if (controller.isMember(agentId)) return;
 
         bytes32 paymentHash = keccak256(abi.encode("invariant-payment", ++_paymentSequence, agentId));
-        uint256 deadline = block.timestamp + 1 hours;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes32 digest = controller.authorizationDigest(
             agentId, paymentHash, ROLE_HASH, controller.agentNonces(agentId), deadline
         );
