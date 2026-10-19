@@ -156,6 +156,25 @@ test("rejects a signed accepted-requirements mismatch", async () => {
   assert.equal(called, false);
 });
 
+test("rejects changes to any B402 extra field before calling the facilitator", async () => {
+  let called = false;
+  const req = requirements();
+  const payment = payload(req, {
+    accepted: {
+      ...payload(req).accepted,
+      extra: { ...req.extra, unexpectedField: "not-from-supported" },
+    },
+  });
+  const client = createB402Client({
+    env: makeEnv(),
+    fetchImpl: async () => { called = true; return jsonResponse({ code: "000000", data: {} }); },
+  });
+  await assert.rejects(client.verifyPayment(payment, req), (error) =>
+    error instanceof B402Error && error.code === "B402_PAYLOAD_MISMATCH"
+  );
+  assert.equal(called, false);
+});
+
 test("rejects a redirect instead of forwarding signed credentials", async () => {
   const client = createB402Client({
     env: makeEnv(),
