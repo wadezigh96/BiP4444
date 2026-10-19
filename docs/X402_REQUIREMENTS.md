@@ -1,6 +1,6 @@
 # BIP4444 x402 Payment Design (BSC)
 
-**Status:** Design locked (pre-implementation)  
+**Status:** Design locked; isolated B402 V2 client adapter added, production flow still disabled  
 **Last updated:** 2026-10-19  
 **Network:** BNB Smart Chain mainnet — CAIP-2 `eip155:56`  
 **Policy:** No production payment flow and no membership grant until verify + settle succeed and negative tests pass.
@@ -63,7 +63,7 @@ Use **x402 (v2)** + **B402** so an agent operator can pay **4 USDT** to the **Sa
 Client → 402 (4 USDT → Safe 0xFf2659…373c) → B402 settle → relayer registerFor → 200
 ```
 
-**Header contract is not finalized.** Binance's official B402 V2 Quick Start currently specifies `X-PAYMENT-REQUIREMENTS` for the seller's HTTP 402 response and the `/papi/v2/b402/verify` then `/papi/v2/b402/settle` flow. Do not implement generic x402 header names from memory; verify the exact buyer payment header and response header in the current V2 API reference before coding. Official reference: https://developers.binance.com/en/docs/products/onchainpay-x402/quick-start.
+**Confirmed seller response:** Binance B402 V2 uses `X-PAYMENT-REQUIREMENTS` on HTTP 402. The full `paymentRequirements` object must include the `extra` fields copied from the matching `/papi/v2/b402/supported` kind, especially `assetTransferMethod`, `signerAddress`, and `spenderAddress` for Permit2. The documented verify request is JSON `{ x402Version: 2, paymentPayload, paymentRequirements }`; verify returns an envelope whose `data.isValid` and `data.payer` must be checked even when HTTP is 200. Settlement uses the same body shape at `/papi/v2/b402/settle`; inspect `data.success`, `data.transaction`, `data.payer`, `data.network`, and `data.amount`. A non-empty transaction with `invalid_transaction_state` can mean pending confirmation rather than terminal failure, so reconcile before retrying. The exact browser/client request header carrying the signed payment payload and any success-response header are still not pinned from the official V2 pages reviewed; do not guess them. Official references: https://developers.binance.com/zh-CN/docs/products/onchainpay-x402/quick-start, https://developers.binance.com/zh-CN/docs/products/onchainpay-x402/open-apis-v2/2.verify-payment, https://developers.binance.com/zh-CN/docs/products/onchainpay-x402/open-apis-v2/3.settle-payment.
 
 ---
 
@@ -75,7 +75,7 @@ Client → 402 (4 USDT → Safe 0xFf2659…373c) → B402 settle → relayer reg
 
 ## 4. B402
 
-Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typically Permit2.
+Backend-only secrets. `supported` → validate exact supported kind → `verify` → `settle`. Verify uses the V2 JSON schema and its `data.isValid` flag; HTTP 200 alone is not proof of valid payment. Settlement is irreversible and must remain disabled until durable idempotency, reconciliation, refund logic, negative tests, and explicit release approval exist. `lib/b402-client.js` is an isolated signed-request adapter using Node's built-in RSA-SHA256; it is not wired into the public API. Its mocked tests cover signing, redirect rejection, provider-envelope validation, and fail-closed settlement gating. USDT BSC support method must be selected from the live `/supported` result rather than assumed.
 
 ---
 
@@ -99,7 +99,7 @@ Idempotent paymentId; refund 4 USDT to **payer** if settle OK but register fails
 
 - [x] Multisig Safe deployed & verified on BSC  
 - [x] `BIP_PAY_TO` set to Safe  
-- [ ] B402 credentials  
+- [ ] B402 production onboarding credentials and approved signing key  
 - [ ] API + ledger + relayer + refund  
 - [ ] Negative tests + remaining audit gates  
 
