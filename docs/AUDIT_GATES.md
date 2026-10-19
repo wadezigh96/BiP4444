@@ -13,7 +13,7 @@
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
 
 - [ ] **Slither report review for the current contract source**  
-  GitHub Actions run [39180953805](https://github.com/wadezigh96/BiP4444/actions/runs/39180953805) completed the Slither job successfully for the updated policy branch. The report artifact still requires review before this gate can be closed. The job uses `--fail-none`; success means the scan completed, not that it found zero issues. The existing `docs/evidence/SLITHER_2026-10-17.md` is historical and predates the 15-minute authorization lifetime change. Review and archive the report artifact for the exact release commit before closing this gate.
+  GitHub Actions run [39180953805](https://github.com/wadezigh96/BiP4444/actions/runs/39180953805) completed Slither for the current Solidity source. Its five informational findings, including the ERC-1271 low-level staticcall detector, are summarized in `docs/evidence/SLITHER_2026-10-19.md`. Review and independent contract assessment are still required before this gate can be closed. The job uses `--fail-none`; success means the scan completed, not that it found zero issues. The existing `docs/evidence/SLITHER_2026-10-17.md` is historical and predates the 15-minute authorization lifetime change. Review and archive the report artifact for the exact release commit before closing this gate.
 
 - [x] **Phase 1 Foundry suite (policy branch)**  
   Evidence: `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md`. CI passed 45 reported tests: 28 controller tests, 15 relayer tests, and the invariant/fork test harnesses. The stateful invariant suite ran 256 sequences / 128,000 handler calls with no reverts. The fork function skipped internally because `BSC_RPC_URL` was not configured; the live-fork gate remains open separately.
@@ -58,7 +58,7 @@
 | Phase 1 Foundry CI | `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md` |
 | Phase 1 policy decision record | `docs/DECISIONS_PHASE_0_2026-10-17.md` |
 | Phase 1 Foundry CI | `docs/evidence/FOUNDRY_PHASE1_CI_2026-10-17.md` |
-| Slither static analysis | `docs/evidence/SLITHER_2026-10-17.md` |
+| Historical Slither scan | `docs/evidence/SLITHER_2026-10-17.md` |\n| Current Slither scan | `docs/evidence/SLITHER_2026-10-19.md` |
 | ERC-8004 BSC | `docs/evidence/ERC8004_BSC_2026-10-16.md` |
 | payTo Safe | `docs/evidence/PAYTO_SAFE_BSC_2026-10-16.md` |
 | x402 | Design `docs/X402_REQUIREMENTS.md`; API contract `docs/API_REGISTER.md` |
