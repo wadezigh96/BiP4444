@@ -57,7 +57,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RelayerCanRegisterWithOwnerConsent() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
 
         vm.prank(relayer);
@@ -76,7 +76,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_CurrentOwnerCanInvalidatePendingAuthorization() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
 
         vm.prank(alice);
@@ -93,7 +93,7 @@ contract BIPMembershipRelayerTest is Test {
         MockERC1271Wallet wallet = new MockERC1271Wallet();
         identity.setOwner(AGENT_ID, address(wallet));
 
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes32 digest = controller.authorizationDigest(
             AGENT_ID, PAYMENT_HASH, ROLE_HASH, controller.agentNonces(AGENT_ID), deadline
         );
@@ -107,7 +107,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_RevertsForNonRelayer() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
         vm.prank(stranger);
         vm.expectRevert(BIPMembershipController.NotRelayer.selector);
@@ -129,7 +129,7 @@ contract BIPMembershipRelayerTest is Test {
     function test_DisabledRelayerCannotRegister() public {
         vm.prank(admin);
         controller.setRelayer(relayer, false);
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.NotRelayer.selector);
@@ -139,7 +139,7 @@ contract BIPMembershipRelayerTest is Test {
     function test_RegisterFor_RevertsWhenPaused() public {
         vm.prank(admin);
         controller.pause();
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.PausedError.selector);
@@ -147,7 +147,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_RevertsOnZeroAgentId() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(0, PAYMENT_HASH, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.ZeroAgentId.selector);
@@ -155,7 +155,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_RevertsOnDuplicateMembership() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         _register(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
         bytes32 anotherPayment = keccak256("payment-2");
         bytes memory signature = _sign(AGENT_ID, anotherPayment, ROLE_HASH, deadline);
@@ -165,7 +165,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_RevertsWhenAgentDoesNotExist() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(9999, PAYMENT_HASH, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(MockERC8004Identity.NonexistentAgent.selector);
@@ -181,7 +181,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_RejectsSignatureWithExcessiveLifetime() public {
-        uint256 deadline = block.timestamp + 2 days;
+        uint256 deadline = block.timestamp + 16 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.SignatureLifetimeTooLong.selector);
@@ -189,7 +189,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_BindsSignatureToRole() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.InvalidSignature.selector);
@@ -199,7 +199,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_RejectsReusedPaymentId() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         _register(AGENT_ID, PAYMENT_HASH, ROLE_HASH, deadline);
         // Even after revocation, the same payment identifier can never be consumed again.
         vm.prank(admin);
@@ -213,7 +213,7 @@ contract BIPMembershipRelayerTest is Test {
     }
 
     function test_RegisterFor_RejectsEmptyAuthorizationFields() public {
-        uint256 deadline = block.timestamp + 1 days;
+        uint256 deadline = block.timestamp + 10 minutes;
         bytes memory signature = _sign(AGENT_ID, PAYMENT_HASH, bytes32(0), deadline);
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.InvalidAuthorization.selector);
@@ -223,6 +223,6 @@ contract BIPMembershipRelayerTest is Test {
     function test_RegisterFor_RejectsMalformedSignature() public {
         vm.prank(relayer);
         vm.expectRevert(BIPMembershipController.InvalidSignature.selector);
-        controller.registerFor(AGENT_ID, PAYMENT_HASH, ROLE_HASH, block.timestamp + 1 days, hex"1234");
+        controller.registerFor(AGENT_ID, PAYMENT_HASH, ROLE_HASH, block.timestamp + 10 minutes, hex"1234");
     }
 }
