@@ -83,7 +83,7 @@ See `docs/OPS_ENV.md`. Never put Binance/Privy **secrets** in `NEXT_PUBLIC_*` or
 ## 8. Tests before production
 
 - [ ] Key directory 200 + valid JSON on official host  
-- [x] Signature / tampering / revoke / expiry / allowlist / dual-control tests passed in GitHub Actions run [39180953805](https://github.com/wadezigh96/BiP4444/actions/runs/39180953805)  
+- [x] Signature / tampering / revoke / expiry / allowlist / dual-control tests passed in GitHub Actions run [39181224188](https://github.com/wadezigh96/BiP4444/actions/runs/39181224188)  
 - [x] S3/S4 dual-control enforced by verifier and covered by the passing test suite  
 
 **Security-first:** design + domain locked; feed not live until keys and deploy exist.
