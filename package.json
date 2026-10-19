@@ -4,7 +4,7 @@
   "private": true,
   "description": "BIP4444 — specification and security planning",
   "scripts": {
-    "test": "node --test test/api-scaffold.test.js",
+    "test": "node --test test/api-scaffold.test.js test/b402-client.test.js",
     "verify:erc8004": "node scripts/verify-erc8004-bsc.js"
   },
   "devDependencies": {},
