@@ -1,7 +1,7 @@
 # BIP4444 Audit and Release Gates
 
 **Policy:** The project is not production-ready until every gate below is completed and evidence is recorded. No mainnet deployment, live payment enablement, or mainnet transaction is authorized by this branch.  
-**Last updated:** 2026-10-19 (B402 and Alert Shield local verification added; CI pending)  
+**Last updated:** 2026-10-19 (Alert Shield tests passed in CI; Foundry job still running)  
 **Deployment target:** BSC Mainnet only (`eip155:56`). No Testnet transactions are requested. Local mock tests and read-only Mainnet checks are allowed; live payment, deployment, and state-changing Mainnet transactions remain disabled until all release gates pass.
 
 ## Gates
@@ -13,7 +13,7 @@
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
 
 - [ ] **Slither report review for the current contract source**  
-  GitHub Actions run [39180568472](https://github.com/wadezigh96/BiP4444/actions/runs/39180568472) completed the Slither job successfully for the updated policy branch. The job uses `--fail-none`; success means the scan completed, not that it found zero issues. The existing `docs/evidence/SLITHER_2026-10-17.md` is historical and predates the 15-minute authorization lifetime change. Review and archive the report artifact for the exact release commit before closing this gate.
+  GitHub Actions run [39180953805](https://github.com/wadezigh96/BiP4444/actions/runs/39180953805) completed the Slither job successfully for the updated policy branch. The report artifact still requires review before this gate can be closed. The job uses `--fail-none`; success means the scan completed, not that it found zero issues. The existing `docs/evidence/SLITHER_2026-10-17.md` is historical and predates the 15-minute authorization lifetime change. Review and archive the report artifact for the exact release commit before closing this gate.
 
 - [x] **Phase 1 Foundry suite (policy branch)**  
   Evidence: `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md`. CI passed 45 reported tests: 28 controller tests, 15 relayer tests, and the invariant/fork test harnesses. The stateful invariant suite ran 256 sequences / 128,000 handler calls with no reverts. The fork function skipped internally because `BSC_RPC_URL` was not configured; the live-fork gate remains open separately.
@@ -22,13 +22,13 @@
   A fail-closed scaffold now exists at `api/health.js` and `api/v1/membership/register.js`; `test/api-scaffold.test.js` covers input rejection and confirms valid registration attempts return 503 without payment or chain side effects. GitHub Actions run `39159164438` passed the API scaffold tests and Foundry suite. This is not a production payment API: B402, durable ledger, owner-consent flow, relayer calls, and refunds are not implemented.
 
 - [ ] **x402 facilitator and settlement verification**  
-  Design locked (B402, 4 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Official B402 V2 docs now confirm the seller's `X-PAYMENT-REQUIREMENTS` header, verify JSON schema and `data.isValid`/`data.payer`, and settle response fields. An isolated signed-request adapter exists at `lib/b402-client.js`; mocked adapter tests passed in [run 39180568472](https://github.com/wadezigh96/BiP4444/actions/runs/39180568472). The adapter is not wired into the public API. Buyer request-header transport remains unpinned, production credentials/onboarding remain outstanding, and persistent ledger, settlement reconciliation, refund logic, and full integration tests are not implemented. No Testnet run is requested.
+  Design locked (B402, 4 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Official B402 V2 docs now confirm the seller's `X-PAYMENT-REQUIREMENTS` header, verify JSON schema and `data.isValid`/`data.payer`, and settle response fields. An isolated signed-request adapter exists at `lib/b402-client.js`; mocked adapter tests passed in [run 39180953805](https://github.com/wadezigh96/BiP4444/actions/runs/39180953805). The adapter is not wired into the public API. Buyer request-header transport remains unpinned, production credentials/onboarding remain outstanding, and persistent ledger, settlement reconciliation, refund logic, and full integration tests are not implemented. No Testnet run is requested.
 
 - [ ] **Relayer registration security**  
   The public free `register(uint256)` method has been removed to close the payment bypass. The branch includes an allowlisted relayer path with EIP-712 owner consent bound to agent ID, payment-operation hash, role hash, per-agent nonce, deadline, chain ID, and controller address. Code supports EOA and ERC-1271 signatures, plus `invalidateAuthorization(agentId)` so the current owner can invalidate pending authorizations before transferring the identity; regression tests cover invalidation and ERC-1271. **Residual limitation:** ERC-8004 ownership transfers do not call this controller. If an owner transfers away and then back before a previously signed authorization expires, the controller cannot prove that an intervening transfer occurred. The owner must invalidate before transfer; the contract lifetime is limited to 15 minutes to reduce (not eliminate) the exposure window. Do not claim this edge case is fully eliminated. Run [39180568472](https://github.com/wadezigh96/BiP4444/actions/runs/39180568472) passed API scaffold tests, B402 adapter tests, Foundry tests, and the Slither job. This is CI evidence, not independent security review. The live-fork gate remains open because the BSC_RPC_URL fork test skipped without a configured RPC. B402 settlement is still an off-chain trust boundary; persistent ledger, verified payer/agent binding, key management, and independent review remain required.
 
 - [ ] **Alert authenticity, reporter authorization, and key-rotation tests**  
-  Verifier and local tests now exist in `lib/alert-shield.js` and `test/alert-shield.test.js`; the test suite was added after run 39180568472, so CI evidence is pending. The public key directory remains empty, there is no publisher-key ceremony or live signing/feed endpoint, and production URL validation is still open.
+  Verifier and tests exist in `lib/alert-shield.js` and `test/alert-shield.test.js`; the API test step passed in [run 39180953805](https://github.com/wadezigh96/BiP4444/actions/runs/39180953805), including signature, tampering, expiry, revoked-key, phishing-link, and dual-control cases. The public key directory remains empty, there is no publisher-key ceremony or live signing/feed endpoint, and production URL validation is still open.
 
 - [ ] **Authentication, privacy, rate-limit, and phishing-resistance review**  
   Partially addressed in Alert Shield + x402 docs; formal review still open.
