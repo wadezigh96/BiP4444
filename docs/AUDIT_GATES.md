@@ -1,7 +1,7 @@
 # BIP4444 Audit and Release Gates
 
 **Policy:** The project is not production-ready until every gate below is completed and evidence is recorded. No mainnet deployment, live payment enablement, or mainnet transaction is authorized by this branch.  
-**Last updated:** 2026-10-19  
+**Last updated:** 2026-10-19 (latest CI evidence reconciled)  
 **Deployment target:** BSC Mainnet only (`eip155:56`). No Testnet transactions are requested. Local mock tests and read-only Mainnet checks are allowed; live payment, deployment, and state-changing Mainnet transactions remain disabled until all release gates pass.
 
 ## Gates
@@ -12,8 +12,8 @@
 - [x] **Verification of the actual BSC ERC-8004 registry address and deployed bytecode**  
   Evidence: `docs/evidence/ERC8004_BSC_2026-10-16.md`
 
-- [x] **Slither static analysis (current contract source)**  
-  Evidence: `docs/evidence/SLITHER_2026-10-17.md`. Slither 0.11.3 reported four informational findings: deadline timestamp comparisons (intentional expiry checks), narrowly scoped signature-decoding assembly, and the uppercase `MAX_MEMBERS()` getter naming convention. No high/medium detector finding appeared in the report. Re-run against the exact release commit and retain independent review.
+- [ ] **Slither report review for the current contract source**  
+  GitHub Actions run [39180177358](https://github.com/wadezigh96/BiP4444/actions/runs/39180177358) completed the Slither job successfully for commit `ea161b3256aa8dd2f5cf7c508515b66ea0c8f524`. The job uses `--fail-none`; success means the scan completed, not that it found zero issues. The existing `docs/evidence/SLITHER_2026-10-17.md` is historical and predates the 15-minute authorization lifetime change. Review and archive the report artifact for the exact release commit before closing this gate.
 
 - [x] **Phase 1 Foundry suite (policy branch)**  
   Evidence: `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md`. CI passed 45 reported tests: 28 controller tests, 15 relayer tests, and the invariant/fork test harnesses. The stateful invariant suite ran 256 sequences / 128,000 handler calls with no reverts. The fork function skipped internally because `BSC_RPC_URL` was not configured; the live-fork gate remains open separately.
@@ -25,7 +25,7 @@
   Design locked (B402, 4 USDT, Safe payTo, path A, refund) — `docs/X402_REQUIREMENTS.md`. Official Binance B402 V2 Quick Start identifies `X-PAYMENT-REQUIREMENTS` for the seller's HTTP 402 response and the `/papi/v2/b402/verify` → `/papi/v2/b402/settle` flow. Buyer payment and success-response header schemas still require exact V2 API-reference confirmation; do not guess generic x402 header names. Runtime evidence TBD; adapter and production credentials remain unimplemented. No Testnet run is requested.
 
 - [ ] **Relayer registration security**  
-  The public free `register(uint256)` method has been removed to close the payment bypass. The branch includes an allowlisted relayer path with EIP-712 owner consent bound to agent ID, payment-operation hash, role hash, per-agent nonce, deadline, chain ID, and controller address. Code now supports EOA and ERC-1271 signatures, plus `invalidateAuthorization(agentId)` so the current owner can invalidate pending authorizations before transferring the identity; new regression tests cover invalidation and ERC-1271. **Residual limitation:** ERC-8004 ownership transfers do not call this controller. If an owner transfers away and then back before a previously signed authorization expires, the controller cannot prove that an intervening transfer occurred. The owner must invalidate before transfer; the contract lifetime is now limited to 15 minutes to reduce (not eliminate) the exposure window. Do not claim this edge case is fully eliminated. Previous verified commit `f2e1e59d332040184d1da62b9a5ebd1aec4b429c` passed API scaffold tests, Foundry tests, dependency installation, and Slither in [PR CI](https://github.com/wadezigh96/BiP4444/actions/runs/39177053284) and [push CI](https://github.com/wadezigh96/BiP4444/actions/runs/39177049194). Those runs predate the 15-minute lifetime change. CI for the latest lifetime/test changes must pass before those changes are treated as test-verified. This is CI evidence, not independent security review. The live-fork gate remains open because the BSC_RPC_URL fork test skipped without a configured RPC. B402 settlement is still an off-chain trust boundary; persistent ledger, verified payer/agent binding, key management, and independent review remain required.
+  The public free `register(uint256)` method has been removed to close the payment bypass. The branch includes an allowlisted relayer path with EIP-712 owner consent bound to agent ID, payment-operation hash, role hash, per-agent nonce, deadline, chain ID, and controller address. Code supports EOA and ERC-1271 signatures, plus `invalidateAuthorization(agentId)` so the current owner can invalidate pending authorizations before transferring the identity; regression tests cover invalidation and ERC-1271. **Residual limitation:** ERC-8004 ownership transfers do not call this controller. If an owner transfers away and then back before a previously signed authorization expires, the controller cannot prove that an intervening transfer occurred. The owner must invalidate before transfer; the contract lifetime is limited to 15 minutes to reduce (not eliminate) the exposure window. Do not claim this edge case is fully eliminated. Latest-head run [39180177358](https://github.com/wadezigh96/BiP4444/actions/runs/39180177358) passed API scaffold tests, Foundry tests, and the Slither job for commit `ea161b3256aa8dd2f5cf7c508515b66ea0c8f524`. This is CI evidence, not independent security review. The live-fork gate remains open because the BSC_RPC_URL fork test skipped without a configured RPC. B402 settlement is still an off-chain trust boundary; persistent ledger, verified payer/agent binding, key management, and independent review remain required.
 
 - [ ] **Alert authenticity, reporter authorization, and key-rotation tests**  
   Design: `docs/ALERT_SHIELD.md`. Feed, signing/verifying implementation, public key directory validation, §11 tests, and evidence remain pending.
@@ -34,7 +34,7 @@
   Partially addressed in Alert Shield + x402 docs; formal review still open.
 
 - [x] **Unit and stateful invariant tests (policy branch)**  
-  Evidence: `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md`. Controller/relayer tests and two stateful invariants pass in CI.
+  Latest-head GitHub Actions run [39180177358](https://github.com/wadezigh96/BiP4444/actions/runs/39180177358) passed the API scaffold tests and Foundry test step for commit `ea161b3256aa8dd2f5cf7c508515b66ea0c8f524`. Historical detailed invariant counts are recorded in `docs/evidence/PHASE1_FOUNDRY_CI_2026-10-17.md`; the live-fork test still requires a separate RPC-backed run.
 
 - [ ] **Live BSC fork test against the ERC-8004 registry**  
   `test/BIPMembershipFork.t.sol` is implemented, but the CI run did not have `BSC_RPC_URL`; the test emitted a skip event and returned. Run locally with a read-only RPC and save a separate evidence file before closing this gate.
@@ -43,7 +43,7 @@
   B402/API settlement, payer-to-agent binding, idempotency, wrong amount/asset/chain/payTo, cap-full, and refund tests remain open. Cover deterministic behavior with local mocks; separately use read-only Mainnet checks for chain/configuration facts. Do not send a Testnet transaction or any state-changing Mainnet transaction during this phase. Alert Shield tests remain open.
 
 - [x] **Foundry CI dependency and reproducibility check (policy branch)**  
-  `forge-std` is pinned to v1.9.7 and the compiler to Solidity 0.8.24. Latest-head GitHub Actions runs [39177053284](https://github.com/wadezigh96/BiP4444/actions/runs/39177053284) and [39177049194](https://github.com/wadezigh96/BiP4444/actions/runs/39177049194) passed API/Foundry tests and Slither on commit `f2e1e59d332040184d1da62b9a5ebd1aec4b429c`. Slither uses `--fail-none`, so a successful job is not proof of zero findings. Re-run and review the report against the exact release commit.
+  `forge-std` is pinned to v1.9.7 and the compiler to Solidity 0.8.24. Latest-head GitHub Actions run [39180177358](https://github.com/wadezigh96/BiP4444/actions/runs/39180177358) passed the API/Foundry and Slither jobs on commit `ea161b3256aa8dd2f5cf7c508515b66ea0c8f524`. Slither uses `--fail-none`; the report still requires review and a BSC fork run is separate.
 
 - [ ] **Independent review of contracts and deployment configuration**
 
