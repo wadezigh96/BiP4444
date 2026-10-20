@@ -139,3 +139,22 @@ test("rejects alerts signed by a key outside its validity period", () => {
   };
   expectCode(() => verifyAlert(envelope(payload), expiredDirectory, { nowMs: NOW }), "ALERT_SIGNATURE_INVALID");
 });
+
+test("rejects duplicate key IDs in the trusted directory instead of silently overriding", () => {
+  const duplicateDirectory = {
+    ...directory,
+    keys: [...directory.keys, { ...directory.keys[0], publicKey: publicKeyBase64(secondary) }],
+  };
+  expectCode(
+    () => verifyAlert(envelope(makePayload()), duplicateDirectory, { nowMs: NOW }),
+    "ALERT_KEY_DIRECTORY_INVALID"
+  );
+});
+
+test("rejects key directory entries without a key ID", () => {
+  const invalidDirectory = { ...directory, keys: [...directory.keys, { reporterId: "unknown" }] };
+  expectCode(
+    () => verifyAlert(envelope(makePayload()), invalidDirectory, { nowMs: NOW }),
+    "ALERT_KEY_DIRECTORY_INVALID"
+  );
+});
