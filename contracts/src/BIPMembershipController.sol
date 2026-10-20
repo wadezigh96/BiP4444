@@ -5,12 +5,15 @@ import {IBIPMembershipController} from "../interfaces/IBIPMembershipController.s
 import {IERC8004Identity} from "../interfaces/IERC8004Identity.sol";
 
 /// @title BIPMembershipController
-/// @notice Skeleton implementation of BIP4444 membership controller.
+/// @notice Membership controller for BIP4444 (Path A: owner register + relayer registerFor).
 /// @dev PLANNING / PRE-AUDIT ARTIFACT ONLY.
 ///      - Do NOT deploy to mainnet until all gates in docs/AUDIT_GATES.md pass.
-///      - Open questions (revoke policy, ownership change handling, x402 proof)
-///        must be resolved before finalizing this contract.
-///      - Access control, pause, and admin model are placeholders.
+///      - Open questions (revoke policy, ownership change handling, on-chain payment proof)
+///        remain; see docs/MEMBERSHIP_CONTROLLER.md.
+///      - Access control is still simple (owner + single relayer). Replace with
+///        AccessControl / multisig before production.
+///      - Payment (x402/B402) is NOT verified on-chain. Relayer must only call
+///        registerFor after successful off-chain settlement + ledger record.
 contract BIPMembershipController is IBIPMembershipController {
     // -------------------------------------------------------------------------
     // Constants
@@ -28,7 +31,7 @@ contract BIPMembershipController is IBIPMembershipController {
     // -------------------------------------------------------------------------
     struct Membership {
         uint256 membershipId;
-        address registeredBy;
+        address registeredBy; // ERC-8004 owner at registration time
         uint64 registeredAt;
         bool active;
     }
@@ -45,12 +48,17 @@ contract BIPMembershipController is IBIPMembershipController {
     /// @dev Simple owner for skeleton; replace with AccessControl / multisig later
     address public owner;
 
+    /// @dev Single relayer authorized to call registerFor (Path A).
+    ///      Set to address(0) to disable relayer path.
+    address public relayer;
+
     bool public paused;
 
     // -------------------------------------------------------------------------
     // Errors
     // -------------------------------------------------------------------------
     error NotOwner();
+    error NotRelayer();
     error PausedError();
     error NotPausedError();
     error CapReached();
@@ -59,12 +67,18 @@ contract BIPMembershipController is IBIPMembershipController {
     error NotAgentOwner();
     error ZeroAddress();
     error ZeroAgentId();
+    error AgentDoesNotExist();
 
     // -------------------------------------------------------------------------
     // Modifiers
     // -------------------------------------------------------------------------
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyRelayer() {
+        if (msg.sender != relayer || relayer == address(0)) revert NotRelayer();
         _;
     }
 
@@ -108,20 +122,39 @@ contract BIPMembershipController is IBIPMembershipController {
     }
 
     // -------------------------------------------------------------------------
-    // Registration
+    // Registration (owner path)
     // -------------------------------------------------------------------------
-    /// @notice Register an ERC-8004 agent as a BIP member.
-    /// @dev Current policy (skeleton):
-    ///      - Caller must be the current ownerOf(agentId) on the identity registry.
-    ///      - Cap and uniqueness enforced on-chain.
-    ///      - Payment verification (x402) is NOT implemented yet.
+    /// @notice Register an ERC-8004 agent as a BIP member (caller must be current owner).
+    /// @dev Payment verification (x402) is NOT implemented on-chain.
     function register(uint256 agentId) external override whenNotPaused {
         if (agentId == 0) revert ZeroAgentId();
 
-        // Ownership check against ERC-8004
         address agentOwner = identityRegistry.ownerOf(agentId);
         if (agentOwner != msg.sender) revert NotAgentOwner();
 
+        _register(agentId, agentOwner, msg.sender);
+    }
+
+    // -------------------------------------------------------------------------
+    // Registration (Path A — relayer)
+    // -------------------------------------------------------------------------
+    /// @notice Register an agent on behalf of its owner (backend relayer after x402 settle).
+    /// @dev - Only the designated relayer may call this.
+    ///      - Agent must exist (ownerOf must not revert).
+    ///      - Cap and uniqueness still enforced.
+    ///      - registeredBy stores the current ERC-8004 owner (not the relayer).
+    ///      - Event registrant = relayer (msg.sender).
+    ///      - Payment is verified off-chain by the relayer before this call.
+    function registerFor(uint256 agentId) external override onlyRelayer whenNotPaused {
+        if (agentId == 0) revert ZeroAgentId();
+
+        address agentOwner = identityRegistry.ownerOf(agentId);
+        // ownerOf reverts if agent does not exist (per mock + real ERC-8004 behaviour)
+
+        _register(agentId, agentOwner, msg.sender);
+    }
+
+    function _register(uint256 agentId, address agentOwner, address registrant) internal {
         Membership storage m = _memberships[agentId];
         if (m.active) revert AlreadyMember();
 
@@ -129,7 +162,7 @@ contract BIPMembershipController is IBIPMembershipController {
 
         uint256 newId = _nextMembershipId++;
         m.membershipId = newId;
-        m.registeredBy = msg.sender;
+        m.registeredBy = agentOwner;
         m.registeredAt = uint64(block.timestamp);
         m.active = true;
 
@@ -137,13 +170,13 @@ contract BIPMembershipController is IBIPMembershipController {
             _activeMemberCount += 1;
         }
 
-        emit MembershipRegistered(agentId, newId, msg.sender);
+        emit MembershipRegistered(agentId, newId, registrant);
     }
 
     // -------------------------------------------------------------------------
-    // Status management (policy still open)
+    // Status management
     // -------------------------------------------------------------------------
-    /// @notice Revoke membership. Skeleton: only contract owner can revoke.
+    /// @notice Revoke membership. Current skeleton: only contract owner.
     /// @dev Final policy (member self-revoke vs admin-only) must be decided.
     function revoke(uint256 agentId) external override onlyOwner whenNotPaused {
         Membership storage m = _memberships[agentId];
@@ -170,10 +203,18 @@ contract BIPMembershipController is IBIPMembershipController {
     }
 
     // -------------------------------------------------------------------------
-    // Admin helpers (skeleton)
+    // Admin helpers
     // -------------------------------------------------------------------------
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
         owner = newOwner;
+    }
+
+    /// @notice Set or update the Path A relayer address.
+    /// @dev Set to address(0) to disable registerFor.
+    function setRelayer(address newRelayer) external override onlyOwner {
+        address previous = relayer;
+        relayer = newRelayer;
+        emit RelayerUpdated(previous, newRelayer);
     }
 }
