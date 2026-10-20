@@ -1,7 +1,7 @@
 # BIP4444 Alert Shield Specification
 
-**Status:** Design (pre-implementation)  
-**Last updated:** 2026-10-16  
+**Status:** Foundation implemented (client verification + demo)  
+**Last updated:** 2026-10-21  
 **Official domain (locked):** `bips4444.vercel.app`  
 **Key directory URL:** `https://bips4444.vercel.app/.well-known/bip-alert-keys.json`
 
@@ -22,8 +22,6 @@ Alert Shield is a **detection and response aid** for BIP members. It publishes s
 | Key directory | `https://bips4444.vercel.app/.well-known/bip-alert-keys.json` |
 | Allowlist | Only this host (and future custom domain if added) in alert `links` |
 
-**Note (2026-10-16):** Root URL currently returns Vercel `NOT_FOUND` until a web app is deployed to this project. After deploy, place `public/.well-known/bip-alert-keys.json` so the key directory returns HTTP 200.
-
 TLS private keys stay on Vercel — never in git or alert payloads.
 
 ---
@@ -42,48 +40,100 @@ TLS private keys stay on Vercel — never in git or alert payloads.
 
 ## 4. Alert schema & signed envelope
 
-Payload fields: `alertId`, `severity`, `title`, `summary`, `guidance[]`, `uncertainty`, `affectedScope`, `links[]` (official host only), `publishedAt`, `expiresAt`, `reporterId`, optional `replacesAlertId` / `cancelsAlertId`.
+**Payload** (canonical JSON string is what is signed):
 
-Envelope: `payload` + `signatures[]` (Ed25519 recommended). Clients verify against the key directory before display.
+```json
+{
+  "alertId": "string",
+  "severity": "S0|S1|S2|S3|S4",
+  "title": "string",
+  "summary": "string",
+  "guidance": ["string"],
+  "uncertainty": "string",
+  "affectedScope": "string",
+  "links": ["https://bips4444.vercel.app/..."],
+  "publishedAt": "ISO-8601",
+  "expiresAt": "ISO-8601",
+  "reporterId": "string",
+  "replacesAlertId": "optional",
+  "cancelsAlertId": "optional"
+}
+```
+
+**Envelope**:
+
+```json
+{
+  "payload": { ... },
+  "signatures": [
+    { "publicKeyId": "string", "signature": "<base64 Ed25519>" }
+  ]
+}
+```
+
+Clients verify each signature against the key directory before display.
 
 ---
 
 ## 5. Key directory format
 
-Served at the official URL above. **Public keys only.**
+Served at the official URL. **Public keys only.**
 
 ```json
 {
   "version": 1,
-  "updatedAt": "2026-10-16T00:00:00Z",
-  "keys": [],
-  "domainAllowlist": ["bips4444.vercel.app"]
+  "updatedAt": "ISO-8601",
+  "domainAllowlist": ["bips4444.vercel.app"],
+  "keys": [
+    {
+      "publicKeyId": "string",
+      "algorithm": "Ed25519",
+      "publicKey": "<base64 raw 32 bytes>",
+      "status": "active|revoked",
+      "note": "optional"
+    }
+  ]
 }
 ```
 
-Add publisher keys after offline keygen. Rotate via new `publicKeyId`; revoke compromised keys immediately.
+Rotate via new `publicKeyId`; set compromised keys to `"status": "revoked"` immediately.
+
+**Current status:** Demo public key present for foundation testing. Private key was generated offline and **never committed**. Replace before any production use.
 
 ---
 
-## 6. Client verify (short)
+## 6. Client verification
 
-1. GET key directory over HTTPS from `bips4444.vercel.app`  
-2. Verify each alert signature with active keys  
-3. Enforce allowlist on links, expiry, severity caps  
-4. Reject unsigned / revoked / revoked-key alerts  
+Implemented in `public/js/alert-verify.js` (Web Crypto Ed25519):
+
+1. GET key directory over HTTPS
+2. Verify signatures against keys with `status === "active"`
+3. Enforce domain allowlist on `links`
+4. Reject expired alerts
+5. Warn (do not hard-fail) on S3/S4 with fewer than 2 valid signatures
+
+Demo page: `/alert-demo.html`
 
 ---
 
-## 7. Env vars (names only — values only on Vercel)
+## 7. Publisher (server)
 
-See `docs/OPS_ENV.md`. Never put Binance/Privy **secrets** in `NEXT_PUBLIC_*` or client bundles.
+Example: `scripts/alert-publisher-example.js`
+
+- Reads `ALERT_PUBLISHER_PRIVATE_KEY` from environment (PEM)
+- Never commits private keys
+- Outputs a signed envelope
 
 ---
 
 ## 8. Tests before production
 
-- [ ] Key directory 200 + valid JSON on official host  
-- [ ] Signature / revoke / expiry / allowlist tests  
-- [ ] S3/S4 dual-control if enabled  
+- [x] Key directory structure + demo public key
+- [x] Client verification module (signature, expiry, allowlist)
+- [x] Demo page
+- [ ] Live key directory 200 on official host (after Vercel deploy)
+- [ ] S3/S4 dual-control hard enforcement (optional)
+- [ ] Key rotation / revoke tests
+- [ ] Independent review of signing key management
 
-**Security-first:** design + domain locked; feed not live until keys and deploy exist.
+**Security-first:** Foundation is in place. Do not treat the demo key or feed as production until real keys are generated offline, rotated into the directory, and the remaining gates pass.

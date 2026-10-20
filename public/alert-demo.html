@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BIP4444 Alert Shield — Verification Demo</title>
+  <style>
+    :root { --bg:#0b0f14; --card:#121a22; --text:#e8eef4; --muted:#8b9aab; --accent:#f0b90b; --ok:#3dd68c; --err:#ff6b6b; --border:#1e2a36; }
+    body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    main { max-width:800px; margin:0 auto; padding:2rem 1.25rem; }
+    h1 { font-size:1.5rem; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.25rem; margin:1rem 0; }
+    pre { background:#0d1218; padding:1rem; border-radius:8px; overflow:auto; font-size:0.8rem; }
+    button { background:var(--accent); color:#1a1400; border:none; padding:0.6rem 1.2rem; border-radius:8px; font-weight:600; cursor:pointer; }
+    .ok { color:var(--ok); } .err { color:var(--err); } .muted { color:var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Alert Shield — Verification Demo</h1>
+    <p class="muted">Client-side Ed25519 verification against the key directory. Demo key only — not production.</p>
+
+    <div class="card">
+      <h2>Sample signed alert</h2>
+      <pre id="envelope"></pre>
+      <button id="verifyBtn">Verify alert</button>
+      <div id="result" style="margin-top:1rem;"></div>
+    </div>
+
+    <p class="muted"><a href="/">← Back</a> · <a href="/.well-known/bip-alert-keys.json">Key directory</a></p>
+  </main>
+
+  <script type="module">
+    import { verifyAlertDetailed } from "./js/alert-verify.js";
+
+    const sampleEnvelope = {
+      payload: {
+        alertId: "demo-2026-10-21-001",
+        severity: "S1",
+        title: "Demo Alert — Alert Shield foundation",
+        summary: "This is a demonstration signed alert for BIP4444 Alert Shield verification testing.",
+        guidance: [
+          "Verify signatures against the key directory",
+          "Only trust links on the official domain"
+        ],
+        uncertainty: "Demo only — not a real incident",
+        affectedScope: "None (demo)",
+        links: ["https://bips4444.vercel.app/"],
+        publishedAt: "2026-10-21T06:00:00Z",
+        expiresAt: "2026-12-31T23:59:59Z",
+        reporterId: "demo-publisher"
+      },
+      signatures: [
+        {
+          publicKeyId: "demo-publisher-2026-10-21",
+          signature: "5ASnhf56yahzW8pGOm7XN6tK0Wiw4/U+3GbFnh2L/3mvgq60SdhzCi9KvIxVae5DnYpnhav4waRf4FT8s1o3Cw=="
+        }
+      ]
+    };
+
+    document.getElementById("envelope").textContent = JSON.stringify(sampleEnvelope, null, 2);
+
+    document.getElementById("verifyBtn").addEventListener("click", async () => {
+      const el = document.getElementById("result");
+      el.innerHTML = "Verifying…";
+      try {
+        const result = await verifyAlertDetailed(sampleEnvelope);
+        if (result.ok) {
+          el.innerHTML = `<div class="ok">✓ Valid signature</div>
+            <div>Severity: ${result.severity}</div>
+            <div>Keys: ${result.verifiedKeyIds.join(", ")}</div>
+            ${result.warning ? `<div class="muted">${result.warning}</div>` : ""}
+            <div style="margin-top:0.5rem;"><strong>${result.display.title}</strong><br>${result.display.summary}</div>`;
+        } else {
+          el.innerHTML = `<div class="err">✗ ${result.reason}</div>`;
+        }
+      } catch (e) {
+        el.innerHTML = `<div class="err">Error: ${e.message}</div>`;
+      }
+    });
+  </script>
+</body>
+</html>

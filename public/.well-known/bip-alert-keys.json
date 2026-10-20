@@ -1,7 +1,15 @@
 {
   "version": 1,
-  "updatedAt": "2026-10-16T09:00:00Z",
-  "keys": [],
+  "updatedAt": "2026-10-21T06:10:00Z",
   "domainAllowlist": ["bips4444.vercel.app"],
-  "note": "Placeholder key directory. Add Ed25519 public keys after offline keygen. Clients must verify alert signatures against active keys only."
+  "keys": [
+    {
+      "publicKeyId": "demo-publisher-2026-10-21",
+      "algorithm": "Ed25519",
+      "publicKey": "d6GH0aePbuX9zH+3Fk9M40s370MXoEjRc0e1l1PGmTg=",
+      "status": "active",
+      "note": "DEMO KEY ONLY — generated for foundation testing. Private key was never committed. Rotate/replace before any production use."
+    }
+  ],
+  "note": "Public keys only. Clients must verify signatures against active keys. Demo key is for testing the verification path; do not treat as production publisher."
 }
