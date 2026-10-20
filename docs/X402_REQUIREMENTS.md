@@ -1,20 +1,20 @@
 # BIP4444 x402 Payment Design (BSC)
 
-**Status:** Design locked (pre-implementation)  
-**Last updated:** 2026-10-16  
+**Status:** Design locked; isolated B402 V2 client adapter added, production flow still disabled  
+**Last updated:** 2026-10-19  
 **Network:** BNB Smart Chain mainnet — CAIP-2 `eip155:56`  
 **Policy:** No production payment flow and no membership grant until verify + settle succeed and negative tests pass.
 
 ---
 
-## 0. Locked product decisions (2026-10-16)
+## 0. Locked product decisions (updated 2026-10-17; current price is 4 USDT)
 
 | Decision | Choice |
 |----------|--------|
 | **Facilitator** | **B402** (Binance x402 on BSC) |
-| **Price** | **5 USDT** exact (`scheme: exact`) |
+| **Price** | **4 USDT** exact (`scheme: exact`) |
 | **Asset** | Binance-Peg **USDT** on BSC: `0x55d398326f99059fF775485246999027B3197955` (18 decimals) |
-| **Atomic amount** | `5000000000000000000` (5 × 10^18) |
+| **Atomic amount** | `4000000000000000000` (4 × 10^18) |
 | **`payTo` address** | **`0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`** |
 | **`payTo` type** | **Safe multisig** (see verification) |
 | **Register path** | **A — Backend relayer** after successful settle |
@@ -22,7 +22,7 @@
 | **Role** | Client supplies a **role** string at registration |
 | **Refund if settle OK but register fails** | **Yes** — see §7 |
 
-Still open: B402 API credentials; relayer key; on-chain `role` later.
+Still open: B402 API credentials; relayer key; on-chain `role` later. The approved price is 4 USDT; any older 5 USDT draft references are obsolete. The API scaffold currently fails closed and does not request or process payments.
 
 ### payTo — Safe verification (BSC mainnet, 2026-10-16)
 
@@ -51,7 +51,7 @@ Relayer key must **not** be required as the only means to move funds; threshold 
 
 ## 1. Goal
 
-Use **x402 (v2)** + **B402** so an agent operator can pay **5 USDT** to the **Safe** `payTo` for BIP membership bound to ERC-8004 identity + **role**, without BIP holding user private keys.
+Use **x402 (v2)** + **B402** so an agent operator can pay **4 USDT** to the **Safe** `payTo` for BIP membership bound to ERC-8004 identity + **role**, without BIP holding user private keys.
 
 **Hard rule:** Membership only after B402 verify + settle and relayer registration (or refund).
 
@@ -60,22 +60,22 @@ Use **x402 (v2)** + **B402** so an agent operator can pay **5 USDT** to the **Sa
 ## 2. Protocol flow
 
 ```
-Client → 402 (5 USDT → Safe 0xFf2659…373c) → B402 settle → relayer registerFor → 200
+Client → 402 (4 USDT → Safe 0xFf2659…373c) → B402 settle → relayer registerFor → 200
 ```
 
-Headers: `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`.
+**Confirmed seller response:** Binance B402 V2 uses `X-PAYMENT-REQUIREMENTS` on HTTP 402. The full `paymentRequirements` object must include the `extra` fields copied from the matching `/papi/v2/b402/supported` kind, especially `assetTransferMethod`, `signerAddress`, and `spenderAddress` for Permit2. The documented verify request is JSON `{ x402Version: 2, paymentPayload, paymentRequirements }`; verify returns an envelope whose `data.isValid` and `data.payer` must be checked even when HTTP is 200. Settlement uses the same body shape at `/papi/v2/b402/settle`; inspect `data.success`, `data.transaction`, `data.payer`, `data.network`, and `data.amount`. A non-empty transaction with `invalid_transaction_state` can mean pending confirmation rather than terminal failure, so reconcile before retrying. The exact browser/client request header carrying the signed payment payload and any success-response header are still not pinned from the official V2 pages reviewed; do not guess them. Official references: https://developers.binance.com/zh-CN/docs/products/onchainpay-x402/quick-start, https://developers.binance.com/zh-CN/docs/products/onchainpay-x402/open-apis-v2/2.verify-payment, https://developers.binance.com/zh-CN/docs/products/onchainpay-x402/open-apis-v2/3.settle-payment.
 
 ---
 
 ## 3. Registration (`agentId` + `role`)
 
-402 binds: `eip155:56`, USDT, `5000000000000000000`, **payTo `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`**, resource metadata with agentId + role.
+402 binds: `eip155:56`, USDT, `4000000000000000000`, **payTo `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c`**, resource metadata with agentId + role.
 
 ---
 
 ## 4. B402
 
-Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typically Permit2.
+Backend-only secrets. `supported` → validate exact supported kind → `verify` → `settle`. Verify uses the V2 JSON schema and its `data.isValid` flag; HTTP 200 alone is not proof of valid payment. Settlement is irreversible and must remain disabled until durable idempotency, reconciliation, refund logic, negative tests, and explicit release approval exist. `lib/b402-client.js` is an isolated signed-request adapter using Node's built-in RSA-SHA256; it is not wired into the public API. Its mocked tests cover signing, redirect rejection, provider-envelope validation, and fail-closed settlement gating. USDT BSC support method must be selected from the live `/supported` result rather than assumed.
 
 ---
 
@@ -83,7 +83,7 @@ Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typical
 
 | Address / key | Role |
 |---------------|------|
-| Safe `0xFf2659…373c` | Receive 5 USDT |
+| Safe `0xFf2659…373c` | Receive 4 USDT |
 | Relayer KMS/EOA | Gas + `registerFor` only |
 | B402 secret | Backend only |
 
@@ -91,7 +91,7 @@ Backend-only secrets. `supported` → `verify` → `settle`. USDT on BSC typical
 
 ## 6–8. Rules, refund, tests
 
-Idempotent paymentId; refund 5 USDT to **payer** if settle OK but register fails; reject wrong payTo (must equal Safe above).
+Idempotent paymentId; refund 4 USDT to **payer** if settle OK but register fails; reject wrong payTo (must equal Safe above).
 
 ---
 
@@ -99,7 +99,7 @@ Idempotent paymentId; refund 5 USDT to **payer** if settle OK but register fails
 
 - [x] Multisig Safe deployed & verified on BSC  
 - [x] `BIP_PAY_TO` set to Safe  
-- [ ] B402 credentials  
+- [ ] B402 production onboarding credentials and approved signing key  
 - [ ] API + ledger + relayer + refund  
 - [ ] Negative tests + remaining audit gates  
 

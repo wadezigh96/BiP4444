@@ -30,7 +30,7 @@
 | `B402_API_SECRET` | **server only** | Facilitator secret |
 | `BIP_PAY_TO` | server or build | `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c` |
 | `MEMBERSHIP_ASSET` | server | USDT `0x55d398326f99059fF775485246999027B3197955` |
-| `MEMBERSHIP_PRICE_ATOMIC` | server | `5000000000000000000` |
+| `MEMBERSHIP_PRICE_ATOMIC` | server | `4000000000000000000` |
 
 ### Privy
 
@@ -39,7 +39,7 @@
 | `NEXT_PUBLIC_PRIVY_APP_ID` | **public OK** | Privy App ID (client) |
 | `PRIVY_APP_SECRET` | **server only** | Privy secret — API routes / server only |
 
-### Chain / membership (when implemented)
+### Settlement safety gates (keep unset/false until every release gate passes)\n\n| Name | Public? | Purpose |\n|------|---------|---------|\n| `BIP_ENABLE_LIVE_SETTLEMENT` | server only | Must remain unset/false during development and audit |\n| `BIP_RELEASE_APPROVED` | server only | Explicit release switch; do not set until independent review and release approval are recorded |\n\n### Chain / membership (when implemented)
 
 | Name | Public? | Purpose |
 |------|---------|--------|

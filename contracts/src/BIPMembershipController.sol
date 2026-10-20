@@ -5,27 +5,25 @@ import {IBIPMembershipController} from "../interfaces/IBIPMembershipController.s
 import {IERC8004Identity} from "../interfaces/IERC8004Identity.sol";
 
 /// @title BIPMembershipController
-/// @notice Skeleton implementation of BIP4444 membership controller.
-/// @dev PLANNING / PRE-AUDIT ARTIFACT ONLY.
-///      - Do NOT deploy to mainnet until all gates in docs/AUDIT_GATES.md pass.
-///      - Open questions (revoke policy, ownership change handling, x402 proof)
-///        must be resolved before finalizing this contract.
-///      - Access control, pause, and admin model are placeholders.
+/// @notice Membership registry referencing existing ERC-8004 identities.
+/// @dev Pre-audit implementation. Never deploy to mainnet until all release gates pass.
 contract BIPMembershipController is IBIPMembershipController {
-    // -------------------------------------------------------------------------
-    // Constants
-    // -------------------------------------------------------------------------
-    /// @dev Hard cap of active BIP memberships. Exposed via MAX_MEMBERS().
     uint256 private constant _MAX_MEMBERS = 4444;
+    uint256 public constant MAX_AUTHORIZATION_LIFETIME = 15 minutes;
+    bytes4 private constant _ERC1271_MAGICVALUE = 0x1626ba7e;
+    uint256 private constant _SECP256K1N_HALF =
+        0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
-    // -------------------------------------------------------------------------
-    // Immutable / configuration
-    // -------------------------------------------------------------------------
+    bytes32 private constant _DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant _AUTHORIZATION_TYPEHASH = keccak256(
+        "MembershipAuthorization(uint256 agentId,bytes32 paymentIdHash,bytes32 roleHash,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 private constant _NAME_HASH = keccak256("BIP4444 Membership Controller");
+    bytes32 private constant _VERSION_HASH = keccak256("1");
+
     IERC8004Identity public immutable identityRegistry;
 
-    // -------------------------------------------------------------------------
-    // Storage
-    // -------------------------------------------------------------------------
     struct Membership {
         uint256 membershipId;
         address registeredBy;
@@ -33,38 +31,49 @@ contract BIPMembershipController is IBIPMembershipController {
         bool active;
     }
 
-    /// @dev agentId => Membership
     mapping(uint256 => Membership) private _memberships;
+    mapping(address => bool) public isRelayer;
+    mapping(address => uint256) public ownerNonces;
+    mapping(uint256 => uint256) public agentNonces;
+    mapping(bytes32 => bool) public usedPaymentIds;
 
-    /// @dev Sequential membership ID (starts at 1)
     uint256 private _nextMembershipId = 1;
-
-    /// @dev Number of currently active memberships
     uint256 private _activeMemberCount;
 
-    /// @dev Simple owner for skeleton; replace with AccessControl / multisig later
     address public owner;
-
+    address public pendingOwner;
     bool public paused;
 
-    // -------------------------------------------------------------------------
-    // Errors
-    // -------------------------------------------------------------------------
     error NotOwner();
+    error NotPendingOwner();
+    error NotRelayer();
+    error NotAgentOwner();
     error PausedError();
     error NotPausedError();
     error CapReached();
     error AlreadyMember();
     error NotMember();
-    error NotAgentOwner();
     error ZeroAddress();
     error ZeroAgentId();
+    error InvalidSignature();
+    error InvalidAuthorization();
+    error SignatureExpired();
+    error SignatureLifetimeTooLong();
+    error PaymentIdAlreadyUsed();
+    error NotCurrentAgentOwner();
 
-    // -------------------------------------------------------------------------
-    // Modifiers
-    // -------------------------------------------------------------------------
+    event AuthorizationInvalidated(uint256 indexed agentId, address indexed agentOwner, uint256 newNonce);
+
+    event OwnershipTransferStarted(address indexed owner, address indexed pendingOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
+        _;
+    }
+
+    modifier onlyRelayer() {
+        if (!isRelayer[msg.sender]) revert NotRelayer();
         _;
     }
 
@@ -73,18 +82,13 @@ contract BIPMembershipController is IBIPMembershipController {
         _;
     }
 
-    // -------------------------------------------------------------------------
-    // Constructor
-    // -------------------------------------------------------------------------
     constructor(address identityRegistry_) {
         if (identityRegistry_ == address(0)) revert ZeroAddress();
         identityRegistry = IERC8004Identity(identityRegistry_);
         owner = msg.sender;
+        emit OwnershipTransferred(address(0), msg.sender);
     }
 
-    // -------------------------------------------------------------------------
-    // Views
-    // -------------------------------------------------------------------------
     function MAX_MEMBERS() external pure override returns (uint256) {
         return _MAX_MEMBERS;
     }
@@ -107,53 +111,140 @@ contract BIPMembershipController is IBIPMembershipController {
         return (m.membershipId, m.registeredBy, m.registeredAt, m.active);
     }
 
-    // -------------------------------------------------------------------------
-    // Registration
-    // -------------------------------------------------------------------------
-    /// @notice Register an ERC-8004 agent as a BIP member.
-    /// @dev Current policy (skeleton):
-    ///      - Caller must be the current ownerOf(agentId) on the identity registry.
-    ///      - Cap and uniqueness enforced on-chain.
-    ///      - Payment verification (x402) is NOT implemented yet.
-    function register(uint256 agentId) external override whenNotPaused {
+    /// @notice Relayer registration with owner consent bound to this chain, contract, payment and role.
+    /// @dev The backend must call only after B402 settlement is confirmed. The contract cannot verify
+    ///      off-chain payment; owner signature prevents the relayer from silently enrolling an agent.
+    function registerFor(
+        uint256 agentId,
+        bytes32 paymentIdHash,
+        bytes32 roleHash,
+        uint256 deadline,
+        bytes calldata ownerSignature
+    ) external override onlyRelayer whenNotPaused {
         if (agentId == 0) revert ZeroAgentId();
+        if (paymentIdHash == bytes32(0) || roleHash == bytes32(0)) revert InvalidAuthorization();
+        if (deadline < block.timestamp) revert SignatureExpired();
+        if (deadline > block.timestamp + MAX_AUTHORIZATION_LIFETIME) revert SignatureLifetimeTooLong();
+        if (usedPaymentIds[paymentIdHash]) revert PaymentIdAlreadyUsed();
 
-        // Ownership check against ERC-8004
         address agentOwner = identityRegistry.ownerOf(agentId);
-        if (agentOwner != msg.sender) revert NotAgentOwner();
+        uint256 nonce = agentNonces[agentId];
+        bytes32 digest = authorizationDigest(agentId, paymentIdHash, roleHash, nonce, deadline);
+        if (!_isValidOwnerSignature(agentOwner, digest, ownerSignature)) revert InvalidSignature();
 
+        // Checks-effects-interactions: no external calls follow these state changes except registry
+        // ownership lookup above. Reverts in _register roll all changes back.
+        agentNonces[agentId] = nonce + 1;
+        ownerNonces[agentOwner] += 1; // Aggregate observability only; authorization nonce is per agent.
+        usedPaymentIds[paymentIdHash] = true;
+        _register(agentId, agentOwner, msg.sender, paymentIdHash, roleHash);
+    }
+
+    /// @notice EIP-712 digest helper for clients signing the relayer authorization.
+    function authorizationDigest(
+        uint256 agentId,
+        bytes32 paymentIdHash,
+        bytes32 roleHash,
+        uint256 nonce,
+        uint256 deadline
+    ) public view returns (bytes32) {
+        bytes32 domainSeparator = keccak256(
+            abi.encode(_DOMAIN_TYPEHASH, _NAME_HASH, _VERSION_HASH, block.chainid, address(this))
+        );
+        bytes32 structHash = keccak256(
+            abi.encode(_AUTHORIZATION_TYPEHASH, agentId, paymentIdHash, roleHash, nonce, deadline)
+        );
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+
+    /// @notice Invalidates outstanding authorizations for this agent. Call before transferring the ERC-8004 identity.
+    /// @dev ERC-8004 transfers do not notify this controller, so invalidation cannot be automatic.
+    function invalidateAuthorization(uint256 agentId) external override {
+        if (identityRegistry.ownerOf(agentId) != msg.sender) revert NotCurrentAgentOwner();
+        uint256 nextNonce = agentNonces[agentId] + 1;
+        agentNonces[agentId] = nextNonce;
+        emit AuthorizationInvalidated(agentId, msg.sender, nextNonce);
+    }
+
+    function _isValidOwnerSignature(address signer, bytes32 digest, bytes calldata signature)
+        internal
+        view
+        returns (bool)
+    {
+        if (signer.code.length == 0) {
+            return _recoverSigner(digest, signature) == signer;
+        }
+        (bool ok, bytes memory result) = signer.staticcall(
+            abi.encodeWithSelector(_ERC1271_MAGICVALUE, digest, signature)
+        );
+        return ok && result.length >= 32 && abi.decode(result, (bytes4)) == _ERC1271_MAGICVALUE;
+    }
+
+    function _recoverSigner(bytes32 digest, bytes calldata signature) internal pure returns (address signer) {
+        if (signature.length != 65) revert InvalidSignature();
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
+        }
+
+        if (uint256(s) > _SECP256K1N_HALF || (v != 27 && v != 28)) revert InvalidSignature();
+        signer = ecrecover(digest, v, r, s);
+        if (signer == address(0)) revert InvalidSignature();
+    }
+
+    function _register(
+        uint256 agentId,
+        address agentOwner,
+        address operator,
+        bytes32 paymentIdHash,
+        bytes32 roleHash
+    ) internal {
         Membership storage m = _memberships[agentId];
         if (m.active) revert AlreadyMember();
-
         if (_activeMemberCount >= _MAX_MEMBERS) revert CapReached();
 
         uint256 newId = _nextMembershipId++;
         m.membershipId = newId;
-        m.registeredBy = msg.sender;
+        m.registeredBy = agentOwner;
         m.registeredAt = uint64(block.timestamp);
         m.active = true;
-
         unchecked {
             _activeMemberCount += 1;
         }
-
-        emit MembershipRegistered(agentId, newId, msg.sender);
+        emit MembershipRegistered(agentId, newId, operator, agentOwner, paymentIdHash, roleHash);
     }
 
-    // -------------------------------------------------------------------------
-    // Status management (policy still open)
-    // -------------------------------------------------------------------------
-    /// @notice Revoke membership. Skeleton: only contract owner can revoke.
-    /// @dev Final policy (member self-revoke vs admin-only) must be decided.
-    function revoke(uint256 agentId) external override onlyOwner whenNotPaused {
+    function setRelayer(address relayer, bool enabled) external override onlyOwner {
+        if (relayer == address(0)) revert ZeroAddress();
+        isRelayer[relayer] = enabled;
+        emit RelayerUpdated(relayer, enabled);
+    }
+
+    function revoke(uint256 agentId) external override onlyOwner {
         Membership storage m = _memberships[agentId];
         if (!m.active) revert NotMember();
-
         m.active = false;
         unchecked {
             _activeMemberCount -= 1;
         }
+        emit MembershipRevoked(agentId, m.membershipId, msg.sender);
+    }
 
+    /// @notice Allows the current ERC-8004 identity owner to revoke its active membership.
+    /// @dev Self-revocation remains available while paused as an owner-controlled exit path.
+    function revokeSelf(uint256 agentId) external override {
+        Membership storage m = _memberships[agentId];
+        if (!m.active) revert NotMember();
+        if (identityRegistry.ownerOf(agentId) != msg.sender) revert NotAgentOwner();
+        m.active = false;
+        unchecked {
+            _activeMemberCount -= 1;
+        }
         emit MembershipRevoked(agentId, m.membershipId, msg.sender);
     }
 
@@ -169,11 +260,18 @@ contract BIPMembershipController is IBIPMembershipController {
         emit Unpaused(msg.sender);
     }
 
-    // -------------------------------------------------------------------------
-    // Admin helpers (skeleton)
-    // -------------------------------------------------------------------------
+    /// @notice Starts a two-step ownership transfer. The pending owner must accept explicitly.
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert ZeroAddress();
-        owner = newOwner;
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner || msg.sender == address(0)) revert NotPendingOwner();
+        address previousOwner = owner;
+        owner = msg.sender;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(previousOwner, msg.sender);
     }
 }

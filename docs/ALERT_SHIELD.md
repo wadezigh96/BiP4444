@@ -1,7 +1,7 @@
 # BIP4444 Alert Shield Specification
 
-**Status:** Design (pre-implementation)  
-**Last updated:** 2026-10-16  
+**Status:** Verification library and local tests added; publisher/feed still disabled  
+**Last updated:** 2026-10-17  
 **Official domain (locked):** `bips4444.vercel.app`  
 **Key directory URL:** `https://bips4444.vercel.app/.well-known/bip-alert-keys.json`
 
@@ -22,7 +22,7 @@ Alert Shield is a **detection and response aid** for BIP members. It publishes s
 | Key directory | `https://bips4444.vercel.app/.well-known/bip-alert-keys.json` |
 | Allowlist | Only this host (and future custom domain if added) in alert `links` |
 
-**Note (2026-10-16):** Root URL currently returns Vercel `NOT_FOUND` until a web app is deployed to this project. After deploy, place `public/.well-known/bip-alert-keys.json` so the key directory returns HTTP 200.
+**Current implementation status:** `lib/alert-shield.js` verifies signed envelopes using Ed25519, a stable canonical JSON representation, active key validity windows, expiry, reporter authorization, and strict HTTPS links to the official host. `test/alert-shield.test.js` covers signatures, tampering, expiry, revoked keys, phishing links, and dual-control severity. The public key directory remains empty, so no publisher is trusted and no live alert feed is enabled. Production HTTP status has not been independently verified.
 
 TLS private keys stay on Vercel — never in git or alert payloads.
 
@@ -35,8 +35,8 @@ TLS private keys stay on Vercel — never in git or alert payloads.
 | S0 | Info | Single publisher OK |
 | S1 | Notice | Single publisher OK |
 | S2 | Warning | Single publisher OK |
-| S3 | Critical | Dual-control recommended |
-| S4 | Emergency | Dual-control recommended |
+| S3 | Critical | Requires signatures from two distinct trusted reporters |
+| S4 | Emergency | Requires signatures from two distinct trusted reporters |
 
 ---
 
@@ -44,7 +44,7 @@ TLS private keys stay on Vercel — never in git or alert payloads.
 
 Payload fields: `alertId`, `severity`, `title`, `summary`, `guidance[]`, `uncertainty`, `affectedScope`, `links[]` (official host only), `publishedAt`, `expiresAt`, `reporterId`, optional `replacesAlertId` / `cancelsAlertId`.
 
-Envelope: `payload` + `signatures[]` (Ed25519 recommended). Clients verify against the key directory before display.
+Envelope: `payload` + `signatures[]`, where each signature entry contains `keyId` and a Base64 Ed25519 signature over the canonical JSON payload. Key-directory entries contain `keyId`, `reporterId`, `status` (`active` or `revoked`), Base64 SPKI DER `publicKey`, `validFrom`, and `validUntil`. A valid primary-reporter signature is required for every alert; S3/S4 also require a second signature from a distinct trusted reporter. The verifier rejects expired alerts and links outside the exact official HTTPS hostname.
 
 ---
 
@@ -61,7 +61,7 @@ Served at the official URL above. **Public keys only.**
 }
 ```
 
-Add publisher keys after offline keygen. Rotate via new `publicKeyId`; revoke compromised keys immediately.
+Add publisher public keys only after offline key generation and independent verification. Rotate via a new `keyId`; revoke compromised keys immediately. Never commit private signing keys. Keep the directory empty until a controlled publisher-key ceremony is completed.
 
 ---
 
@@ -83,7 +83,7 @@ See `docs/OPS_ENV.md`. Never put Binance/Privy **secrets** in `NEXT_PUBLIC_*` or
 ## 8. Tests before production
 
 - [ ] Key directory 200 + valid JSON on official host  
-- [ ] Signature / revoke / expiry / allowlist tests  
-- [ ] S3/S4 dual-control if enabled  
+- [x] Signature / tampering / revoke / expiry / allowlist / dual-control tests passed in GitHub Actions run [39181224188](https://github.com/wadezigh96/BiP4444/actions/runs/39181224188)  
+- [x] S3/S4 dual-control enforced by verifier and covered by the passing test suite  
 
 **Security-first:** design + domain locked; feed not live until keys and deploy exist.
