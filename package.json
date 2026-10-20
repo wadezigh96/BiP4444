@@ -4,7 +4,9 @@
   "private": true,
   "description": "BIP4444 — Binance Intelligence Passport (specification & security planning)",
   "scripts": {
-    "verify:erc8004": "node scripts/verify-erc8004-bsc.js"
+    "verify:erc8004": "node scripts/verify-erc8004-bsc.js",
+    "relayer:example": "node scripts/relayer-x402-example.js",
+    "alert:publish-example": "node scripts/alert-publisher-example.js"
   },
   "devDependencies": {},
   "engines": {
