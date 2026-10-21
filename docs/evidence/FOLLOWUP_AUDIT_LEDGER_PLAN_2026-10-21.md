@@ -114,3 +114,10 @@ If no suitable provider is already connected, prepare a provider-neutral interfa
 ## Decision
 
 **NOT READY FOR PRODUCTION.** This follow-up records CI evidence and the next safe implementation unit only. It does not authorize merge, deployment, live settlement, registration, or any state-changing Mainnet transaction.
+
+
+## Vercel resource discovery result
+
+A read-only Vercel team-context lookup returned the `wadezigh` Hobby team and listed its linked projects, but `bips4444` was not among the projects returned. A project search for `bips4444` in that context returned no match. This does not prove that the project does not exist; it means this session has not established the correct project context or verified a connected database for BIP4444.
+
+**Do not provision a new database or add environment variables based on this incomplete discovery.** First identify the exact existing BIP4444 Vercel project/team context, then inspect its existing storage/connector connections read-only. Do not retrieve decrypted environment-variable values. No database was selected or modified in this audit.
