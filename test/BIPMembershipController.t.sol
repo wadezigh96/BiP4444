@@ -13,7 +13,7 @@ contract BIPMembershipControllerTest is Test {
     address internal alice = address(0xA11CE1);
     address internal bob = address(0xB0B);
     address internal charlie = address(0xC0);
-    address internal relayer = address(0xR3L4Y3R);
+    address internal relayer = address(0x1234);
 
     uint256 internal constant AGENT_ALICE = 1001;
     uint256 internal constant AGENT_BOB = 1002;
@@ -199,7 +199,7 @@ contract BIPMembershipControllerTest is Test {
     }
 
     function test_SetRelayer() public {
-        address newRelayer = address(0xNEWR);
+        address newRelayer = address(0x1235);
         vm.prank(admin);
         vm.expectEmit(true, true, false, true);
         emit RelayerUpdated(relayer, newRelayer);

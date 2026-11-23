@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BIP4444 — Agent ID Gate Demo</title>
+  <meta name="description" content="Live demo: Agent ID as root identity for BIP4444 on BNB Smart Chain — binding, delegated capabilities, fail-closed authorization." />
+  <style>
+    :root { --bg:#0b0f14; --card:#121a22; --text:#e8eef4; --muted:#8b9aab; --accent:#f0b90b; --ok:#3dd68c; --err:#ff6b6b; --border:#1e2a36; }
+    body { margin:0; font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    main { max-width:800px; margin:0 auto; padding:2rem 1.25rem; }
+    h1 { font-size:1.5rem; }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.25rem; margin:1rem 0; }
+    input { background:#0d1218; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:0.55rem; width:100%; margin:0.35rem 0 0.8rem; box-sizing:border-box; }
+    button { background:var(--accent); color:#1a1400; border:none; padding:0.6rem 1.2rem; border-radius:8px; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:0.45; cursor:not-allowed; }
+    .ok { color:var(--ok); } .err { color:var(--err); } .muted { color:var(--muted); }
+    a { color:var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Agent ID Gate — Live Demo</h1>
+    <p class="muted">BIP4444 uses <strong>Agent ID</strong> (SPACE ID, <code>name.ai</code>) as the root identity on BNB Smart Chain:
+    bind your ERC-8004 agent, grant scoped &amp; expiring capabilities to sub-agents, and authorization fails closed the moment a capability expires, is revoked, or the Agent ID is gone.</p>
+
+    <div class="card">
+      <h2>1 · Check an Agent ID (live on BSC, no wallet needed)</h2>
+      <label class="muted" for="checkAddr">Wallet address</label>
+      <input id="checkAddr" placeholder="0x…" autocomplete="off" />
+      <button id="checkBtn">Check Agent ID</button>
+      <div id="checkResult" style="margin-top:1rem;"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Connect your wallet</h2>
+      <button id="connectBtn">Connect wallet (BSC mainnet)</button>
+      <div id="walletInfo" style="margin-top:1rem;"></div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Bind your ERC-8004 agent</h2>
+      <p class="muted" id="gateNotice">Gate status: checking…</p>
+      <button id="operatorBtn" disabled>Register as operator — Agent ID only (1 transaction)</button>
+      <div id="operatorResult" style="margin:0.6rem 0 1.2rem;"></div>
+      <label class="muted" for="agentIdInput">Optional upgrade: your ERC-8004 agent ID</label>
+      <input id="agentIdInput" placeholder="e.g. 1001" autocomplete="off" />
+      <button id="registerBtn" disabled>Bind ERC-8004 agent</button>
+      <div id="registerResult" style="margin-top:1rem;"></div>
+      <p class="muted" id="gateStats"></p>
+    </div>
+
+    <div class="card">
+      <h2>4 · Grant a delegated capability</h2>
+      <label class="muted" for="delegateInput">Delegate (sub-agent) address</label>
+      <input id="delegateInput" placeholder="0x…" autocomplete="off" />
+      <label class="muted" for="scopeInput">Scope label</label>
+      <input id="scopeInput" value="bip4444:alerts:receive" autocomplete="off" />
+      <label class="muted" for="expiryInput">Expires in (hours)</label>
+      <input id="expiryInput" type="number" value="24" min="1" />
+      <button id="grantBtn" disabled>Grant capability</button>
+      <div id="grantResult" style="margin-top:1rem;"></div>
+      <p class="muted">Every grant is an explicit transaction in <em>your</em> wallet. The gate holds no assets and never signs for you.</p>
+    </div>
+
+    <div class="card">
+      <h2>5 · Incident response — panic freeze &amp; guardian</h2>
+      <p class="muted">Key compromised? Freeze kills every authorization from your wallet instantly.
+      A guardian you nominate can freeze for you if you lose your key — but can never unfreeze or move anything.
+      Unfreeze is operator-only, after a 24-hour cooldown.</p>
+      <label class="muted" for="guardianInput">Guardian address (optional)</label>
+      <input id="guardianInput" placeholder="0x…" autocomplete="off" />
+      <button id="guardianBtn" disabled>Set guardian</button>
+      <button id="freezeBtn" disabled style="margin-left:0.5rem;">Panic freeze</button>
+      <button id="unfreezeBtn" disabled style="margin-left:0.5rem;">Unfreeze (after 24h)</button>
+      <div id="freezeResult" style="margin-top:1rem;"></div>
+    </div>
+
+    <p class="muted"><a href="/">← Back</a> · Agent ID contract:
+      <a href="https://bscscan.com/address/0x60b9262456de011f7d15a54cdd8c48baaa8b022f" target="_blank" rel="noopener">0x60b9…022f</a>
+      · <a href="https://github.com/wadezigh96/BiP4444/blob/main/docs/AGENT_ID_HACKATHON.md" target="_blank" rel="noopener">How it works</a></p>
+  </main>
+
+  <script type="module">
+    import { checkAgentID, connectWallet, gateContract, readProvider, scopeFromLabel, GATE_ADDRESS } from "./js/agent-id-gate.js";
+
+    const $ = (id) => document.getElementById(id);
+    let signer = null, myAddress = null;
+
+    if (!GATE_ADDRESS) {
+      $("gateNotice").innerHTML = "Gate contract is not deployed yet — steps 3–4 activate automatically once <code>GATE_ADDRESS</code> is set in <code>public/js/agent-id-gate.js</code>. Step 1 already runs against the live Agent ID contract.";
+    } else {
+      $("gateNotice").innerHTML = "Gate live at <code>" + GATE_ADDRESS + "</code>.";
+      try {
+        const gate = gateContract(readProvider());
+        const [n, g, f] = await Promise.all([gate.uniqueAgentIDInteractors(), gate.totalCapabilityGrants(), gate.foundingCount()]);
+        $("gateStats").textContent = "On-chain so far: " + n.toString() + " Agent ID holders registered · " + g.toString() + " capabilities granted · Founding 44 seats claimed: " + f.toString() + "/44 (first 44 operators mint free — membership fee waived).";
+      } catch (e) { /* stats are best-effort */ }
+    }
+
+    $("checkBtn").onclick = async () => {
+      const el = $("checkResult");
+      el.textContent = "Checking on BSC…";
+      try {
+        const has = await checkAgentID($("checkAddr").value.trim());
+        el.innerHTML = has
+          ? '<span class="ok">✓ This address holds an Agent ID.</span>'
+          : '<span class="err">✗ This address does not hold an Agent ID.</span> Claim one in the Binance App: Wallet → Agent ID banner.';
+      } catch (e) { el.innerHTML = '<span class="err">' + e.message + "</span>"; }
+    };
+
+    $("connectBtn").onclick = async () => {
+      const el = $("walletInfo");
+      try {
+        const w = await connectWallet();
+        signer = w.signer; myAddress = w.address;
+        const has = await checkAgentID(myAddress);
+        el.innerHTML = "Connected: <code>" + myAddress + "</code><br>" +
+          (has ? '<span class="ok">✓ You hold an Agent ID.</span>' : '<span class="err">✗ No Agent ID on this wallet yet.</span>');
+        const gateOn = !!GATE_ADDRESS;
+        $("operatorBtn").disabled = !gateOn;
+        $("registerBtn").disabled = !gateOn;
+        $("grantBtn").disabled = !gateOn;
+        $("guardianBtn").disabled = !gateOn;
+        $("freezeBtn").disabled = !gateOn;
+        $("unfreezeBtn").disabled = !gateOn;
+      } catch (e) { el.innerHTML = '<span class="err">' + e.message + "</span>"; }
+    };
+
+    $("operatorBtn").onclick = async () => {
+      const el = $("operatorResult");
+      try {
+        const gate = gateContract(signer);
+        const tx = await gate.registerOperator();
+        el.textContent = "Transaction sent: " + tx.hash + " — waiting for confirmation…";
+        await tx.wait();
+        el.innerHTML = '<span class="ok">✓ Registered as operator. You can now grant capabilities below.</span>';
+      } catch (e) { el.innerHTML = '<span class="err">' + (e.shortMessage || e.message) + "</span>"; }
+    };
+
+    $("registerBtn").onclick = async () => {
+      const el = $("registerResult");
+      try {
+        const gate = gateContract(signer);
+        const tx = await gate.registerAgent(BigInt($("agentIdInput").value.trim()));
+        el.textContent = "Transaction sent: " + tx.hash + " — waiting for confirmation…";
+        await tx.wait();
+        el.innerHTML = '<span class="ok">✓ Agent bound. Your wallet is now a registered BIP4444 operator.</span>';
+      } catch (e) { el.innerHTML = '<span class="err">' + (e.shortMessage || e.message) + "</span>"; }
+    };
+
+    async function sendGate(method, args, el, okMsg) {
+      try {
+        const gate = gateContract(signer);
+        const tx = await gate[method](...args);
+        el.textContent = "Transaction sent: " + tx.hash + " — waiting for confirmation…";
+        await tx.wait();
+        el.innerHTML = '<span class="ok">✓ ' + okMsg + "</span>";
+      } catch (e) { el.innerHTML = '<span class="err">' + (e.shortMessage || e.message) + "</span>"; }
+    }
+
+    $("guardianBtn").onclick = () => sendGate("setGuardian", [$("guardianInput").value.trim()], $("freezeResult"), "Guardian set.");
+    $("freezeBtn").onclick = () => sendGate("freeze", [], $("freezeResult"), "Frozen. All authorizations from your wallet are now dead.");
+    $("unfreezeBtn").onclick = () => sendGate("unfreeze", [], $("freezeResult"), "Unfrozen.");
+
+    $("grantBtn").onclick = async () => {
+      const el = $("grantResult");
+      try {
+        const gate = gateContract(signer);
+        const expiresAt = Math.floor(Date.now() / 1000) + Number($("expiryInput").value) * 3600;
+        const tx = await gate.grantCapability($("delegateInput").value.trim(), scopeFromLabel($("scopeInput").value), expiresAt);
+        el.textContent = "Transaction sent: " + tx.hash + " — waiting for confirmation…";
+        const receipt = await tx.wait();
+        el.innerHTML = '<span class="ok">✓ Capability granted.</span> Tx: <code>' + receipt.hash + "</code>";
+      } catch (e) { el.innerHTML = '<span class="err">' + (e.shortMessage || e.message) + "</span>"; }
+    };
+  </script>
+</body>
+</html>

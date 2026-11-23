@@ -1,0 +1,533 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import {Test} from "forge-std/Test.sol";
+import {BIPAgentIDGate} from "../contracts/src/BIPAgentIDGate.sol";
+import {MockAgentID} from "./mocks/MockAgentID.sol";
+import {MockERC8004Identity} from "./mocks/MockERC8004Identity.sol";
+
+contract BIPAgentIDGateTest is Test {
+    BIPAgentIDGate internal gate;
+    MockAgentID internal agentID;
+    MockERC8004Identity internal identity;
+
+    address internal admin = address(0xA11CE);
+    address internal alice = address(0xA11CE1);
+    address internal bob = address(0xB0B);
+    address internal subAgent = address(0x5AB);
+    address internal stranger = address(0x577);
+
+    uint256 internal constant AGENT_ALICE = 1001;
+    uint256 internal constant AGENT_BOB = 1002;
+
+    bytes32 internal constant SCOPE_ALERTS = keccak256("bip4444:alerts:receive");
+    bytes32 internal constant SCOPE_OTHER = keccak256("bip4444:other");
+
+    event AgentRegistered(address indexed wallet, uint256 indexed erc8004AgentId);
+    event AgentUnregistered(address indexed wallet, uint256 indexed erc8004AgentId);
+    event CapabilityGranted(
+        uint256 indexed capabilityId, address indexed grantor, address indexed delegate, bytes32 scope, uint64 expiresAt
+    );
+    event CapabilityRevoked(uint256 indexed capabilityId, address indexed grantor);
+
+    function setUp() public {
+        agentID = new MockAgentID();
+        identity = new MockERC8004Identity();
+
+        vm.prank(admin);
+        gate = new BIPAgentIDGate(address(agentID), address(identity));
+
+        identity.setOwner(AGENT_ALICE, alice);
+        identity.setOwner(AGENT_BOB, bob);
+
+        // alice and bob hold an Agent ID; stranger does not
+        agentID.setBalance(alice, 1);
+        agentID.setBalance(bob, 1);
+    }
+
+    function _registerAlice() internal {
+        vm.prank(alice);
+        gate.registerAgent(AGENT_ALICE);
+    }
+
+    function _grantFromAlice() internal returns (uint256) {
+        vm.prank(alice);
+        return gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 1 days));
+    }
+
+    // -------------------------------------------------------------------------
+    // Constructor / views
+    // -------------------------------------------------------------------------
+
+    function test_ConstructorSetsConfig() public view {
+        assertEq(gate.owner(), admin);
+        assertEq(address(gate.agentID()), address(agentID));
+        assertEq(address(gate.identityRegistry()), address(identity));
+        assertEq(gate.uniqueAgentIDInteractors(), 0);
+    }
+
+    function test_ConstructorRevertsOnZero() public {
+        vm.expectRevert(BIPAgentIDGate.ZeroAddress.selector);
+        new BIPAgentIDGate(address(0), address(identity));
+        vm.expectRevert(BIPAgentIDGate.ZeroAddress.selector);
+        new BIPAgentIDGate(address(agentID), address(0));
+    }
+
+    function test_HasAgentID() public view {
+        assertTrue(gate.hasAgentID(alice));
+        assertFalse(gate.hasAgentID(stranger));
+        // zero address must return false, not propagate the real
+        // ERC-721 contract's balanceOf(address(0)) revert
+        assertFalse(gate.hasAgentID(address(0)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Registration
+    // -------------------------------------------------------------------------
+
+    function test_Register_Success() public {
+        vm.prank(alice);
+        vm.expectEmit(true, true, false, true);
+        emit AgentRegistered(alice, AGENT_ALICE);
+        gate.registerAgent(AGENT_ALICE);
+
+        assertTrue(gate.isRegistered(alice));
+        assertEq(gate.walletOfAgent(AGENT_ALICE), alice);
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+
+        (uint256 boundId,, bool active) = gate.bindingOf(alice);
+        assertEq(boundId, AGENT_ALICE);
+        assertTrue(active);
+    }
+
+    function test_Register_RevertsWithoutAgentID() public {
+        // bob owns AGENT_BOB but simulate him losing / never claiming Agent ID
+        agentID.setBalance(bob, 0);
+        vm.prank(bob);
+        vm.expectRevert(BIPAgentIDGate.NoAgentID.selector);
+        gate.registerAgent(AGENT_BOB);
+    }
+
+    function test_Register_RevertsWhenNotAgentOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.NotAgentOwner.selector);
+        gate.registerAgent(AGENT_BOB);
+    }
+
+    function test_Register_RevertsOnZeroAgentId() public {
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.ZeroAgentId.selector);
+        gate.registerAgent(0);
+    }
+
+    function test_Register_RevertsOnDuplicateBinding() public {
+        _registerAlice();
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.AlreadyBound.selector);
+        gate.registerAgent(AGENT_ALICE);
+    }
+
+    function test_Register_RevertsWhenAgentBoundToOtherWallet() public {
+        _registerAlice();
+        // alice's agent cannot be bound again by bob even though bob has Agent ID
+        identity.setOwner(AGENT_ALICE, bob); // ownership moved, binding persists
+        vm.prank(bob);
+        vm.expectRevert(BIPAgentIDGate.AgentAlreadyBound.selector);
+        gate.registerAgent(AGENT_ALICE);
+    }
+
+    function test_UniqueInteractors_CountsWalletOnce() public {
+        _registerAlice();
+        vm.prank(alice);
+        gate.unregisterAgent();
+        _registerAlice();
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+
+        vm.prank(bob);
+        gate.registerAgent(AGENT_BOB);
+        assertEq(gate.uniqueAgentIDInteractors(), 2);
+    }
+
+    // -------------------------------------------------------------------------
+    // Operator-only registration (Agent ID only, low-friction path)
+    // -------------------------------------------------------------------------
+
+    function test_RegisterOperator_Success_AndCanGrant() public {
+        vm.prank(bob);
+        vm.expectEmit(true, true, false, true);
+        emit AgentRegistered(bob, 0);
+        gate.registerOperator();
+
+        assertTrue(gate.isRegistered(bob));
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+
+        // operator-only wallets can grant capabilities immediately
+        vm.prank(bob);
+        uint256 id = gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 1 days));
+        assertTrue(gate.isAuthorized(bob, subAgent, SCOPE_ALERTS, id));
+    }
+
+    function test_RegisterOperator_RevertsWithoutAgentID() public {
+        agentID.setBalance(stranger, 0);
+        vm.prank(stranger);
+        vm.expectRevert(BIPAgentIDGate.NoAgentID.selector);
+        gate.registerOperator();
+    }
+
+    function test_RegisterOperator_UpgradesToAgentBinding() public {
+        vm.prank(alice);
+        gate.registerOperator();
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+
+        // upgrade in place to a full ERC-8004 binding, counted once
+        vm.prank(alice);
+        gate.registerAgent(AGENT_ALICE);
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+        assertEq(gate.walletOfAgent(AGENT_ALICE), alice);
+
+        (uint256 boundId,, bool active) = gate.bindingOf(alice);
+        assertEq(boundId, AGENT_ALICE);
+        assertTrue(active);
+
+        // a second full binding still reverts
+        identity.setOwner(AGENT_BOB, alice);
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.AlreadyBound.selector);
+        gate.registerAgent(AGENT_BOB);
+    }
+
+    // -------------------------------------------------------------------------
+    // Unregister
+    // -------------------------------------------------------------------------
+
+    function test_Unregister_Success() public {
+        _registerAlice();
+        vm.prank(alice);
+        vm.expectEmit(true, true, false, true);
+        emit AgentUnregistered(alice, AGENT_ALICE);
+        gate.unregisterAgent();
+
+        assertFalse(gate.isRegistered(alice));
+        assertEq(gate.walletOfAgent(AGENT_ALICE), address(0));
+    }
+
+    function test_Unregister_RevertsWhenNotBound() public {
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.NotBound.selector);
+        gate.unregisterAgent();
+    }
+
+    // -------------------------------------------------------------------------
+    // Capabilities
+    // -------------------------------------------------------------------------
+
+    function test_Grant_AndIsAuthorized() public {
+        _registerAlice();
+        uint64 expiry = uint64(block.timestamp + 1 days);
+
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit CapabilityGranted(1, alice, subAgent, SCOPE_ALERTS, expiry);
+        uint256 id = gate.grantCapability(subAgent, SCOPE_ALERTS, expiry);
+
+        assertEq(id, 1);
+        assertEq(gate.totalCapabilityGrants(), 1);
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+        // wrong scope / wrong delegate fail
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_OTHER, id));
+        assertFalse(gate.isAuthorized(alice, stranger, SCOPE_ALERTS, id));
+        // unknown id fails closed
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, 999));
+    }
+
+    function test_Grant_RevertsWhenNotBound() public {
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.NotBound.selector);
+        gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 1 days));
+    }
+
+    function test_Grant_RevertsOnBadParams() public {
+        _registerAlice();
+        uint64 expiry = uint64(block.timestamp + 1 days);
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.InvalidDelegate.selector);
+        gate.grantCapability(address(0), SCOPE_ALERTS, expiry);
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.InvalidDelegate.selector);
+        gate.grantCapability(alice, SCOPE_ALERTS, expiry);
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.ZeroScope.selector);
+        gate.grantCapability(subAgent, bytes32(0), expiry);
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.InvalidExpiry.selector);
+        gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp));
+    }
+
+    function test_Revoke_OnlyGrantor_AndFailsClosed() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+
+        vm.prank(bob);
+        vm.expectRevert(BIPAgentIDGate.NotGrantor.selector);
+        gate.revokeCapability(id);
+
+        vm.prank(alice);
+        vm.expectEmit(true, true, false, true);
+        emit CapabilityRevoked(id, alice);
+        gate.revokeCapability(id);
+
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.AlreadyRevoked.selector);
+        gate.revokeCapability(id);
+    }
+
+    function test_Revoke_UnknownCapability() public {
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.UnknownCapability.selector);
+        gate.revokeCapability(42);
+    }
+
+    function test_Authorization_Expires() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        vm.warp(block.timestamp + 2 days);
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+    }
+
+    function test_Authorization_DiesWhenGrantorLosesAgentID() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        // Agent ID is non-transferable on-chain, but model any loss path
+        agentID.setBalance(alice, 0);
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+    }
+
+    function test_Authorization_DiesOnUnregister() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+
+        vm.prank(alice);
+        gate.unregisterAgent();
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+    }
+
+    // -------------------------------------------------------------------------
+    // Founding 44 — free-mint cohort, first come, on-chain seats
+    // -------------------------------------------------------------------------
+
+    function test_Founding_FirstRegistrantsGetSeatsInOrder() public {
+        _registerAlice();
+        assertEq(gate.foundingSeatOf(alice), 1);
+        assertTrue(gate.isFounding(alice));
+
+        vm.prank(bob);
+        gate.registerOperator();
+        assertEq(gate.foundingSeatOf(bob), 2);
+        assertEq(gate.foundingCount(), 2);
+        assertFalse(gate.isFounding(stranger));
+    }
+
+    function test_Founding_CapsAt44() public {
+        for (uint256 i = 0; i < 45; i++) {
+            address w = address(uint160(0x10000 + i));
+            agentID.setBalance(w, 1);
+            vm.prank(w);
+            gate.registerOperator();
+        }
+        assertEq(gate.foundingCount(), 44);
+        assertEq(gate.uniqueAgentIDInteractors(), 45);
+        assertEq(gate.foundingSeatOf(address(uint160(0x10000 + 43))), 44);
+        // 45th registrant is a normal operator, no seat
+        assertEq(gate.foundingSeatOf(address(uint160(0x10000 + 44))), 0);
+    }
+
+    function test_Founding_SeatSurvivesUnregister() public {
+        _registerAlice();
+        vm.prank(alice);
+        gate.unregisterAgent();
+        assertTrue(gate.isFounding(alice));
+        assertEq(gate.foundingSeatOf(alice), 1);
+    }
+
+    // -------------------------------------------------------------------------
+    // Panic freeze & guardian rescue
+    // -------------------------------------------------------------------------
+
+    address internal guardian = address(0x6A12D);
+
+    function test_Freeze_KillsAuthorizationAndBlocksGrants() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        vm.prank(alice);
+        gate.freeze();
+        assertTrue(gate.isFrozen(alice));
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.FrozenError.selector);
+        gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 1 days));
+
+        // revocation still works while frozen (incident cleanup)
+        vm.prank(alice);
+        gate.revokeCapability(id);
+    }
+
+    function test_Unfreeze_RequiresCooldown() public {
+        _registerAlice();
+        // 7-day capability so it outlives the 24h freeze cooldown
+        vm.prank(alice);
+        uint256 id = gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 7 days));
+
+        vm.prank(alice);
+        gate.freeze();
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.FreezeCooldownActive.selector);
+        gate.unfreeze();
+
+        vm.warp(block.timestamp + 24 hours + 1);
+        vm.prank(alice);
+        gate.unfreeze();
+        assertFalse(gate.isFrozen(alice));
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+    }
+
+    function test_GuardianFreeze_OnlyGuardian_AndGuardianCannotUnfreeze() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+
+        vm.prank(alice);
+        gate.setGuardian(guardian);
+        assertEq(gate.guardianOf(alice), guardian);
+
+        vm.prank(stranger);
+        vm.expectRevert(BIPAgentIDGate.NotGuardian.selector);
+        gate.guardianFreeze(alice);
+
+        vm.prank(guardian);
+        gate.guardianFreeze(alice);
+        assertTrue(gate.isFrozen(alice));
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        // guardian has no binding of its own: unfreeze is operator-only
+        vm.prank(guardian);
+        vm.expectRevert(BIPAgentIDGate.NotBound.selector);
+        gate.unfreeze();
+    }
+
+    function test_Freeze_DoubleFreezeAndBadUnfreezeRevert() public {
+        _registerAlice();
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.NotFrozenError.selector);
+        gate.unfreeze();
+
+        vm.prank(alice);
+        gate.freeze();
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.FrozenError.selector);
+        gate.freeze();
+    }
+
+    // -------------------------------------------------------------------------
+    // Attenuated sub-delegation (depth 1, same scope, shorter life)
+    // -------------------------------------------------------------------------
+
+    address internal subSub = address(0xBEEF);
+
+    function test_SubDelegate_Success() public {
+        _registerAlice();
+        uint256 parent = _grantFromAlice();
+
+        vm.prank(subAgent);
+        uint256 child = gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+
+        assertTrue(gate.isAuthorized(alice, subSub, SCOPE_ALERTS, child));
+        (,,,,, uint256 parentOfChild) = gate.capabilityOf(child);
+        assertEq(parentOfChild, parent);
+    }
+
+    function test_SubDelegate_AttenuationRules() public {
+        _registerAlice();
+        uint256 parent = _grantFromAlice();
+
+        // expiry beyond parent reverts
+        vm.prank(subAgent);
+        vm.expectRevert(BIPAgentIDGate.ExpiryExceedsParent.selector);
+        gate.subDelegate(parent, subSub, uint64(block.timestamp + 2 days));
+
+        // non-delegate cannot sub-delegate
+        vm.prank(bob);
+        vm.expectRevert(BIPAgentIDGate.NotDelegate.selector);
+        gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+
+        // depth capped at 1
+        vm.prank(subAgent);
+        uint256 child = gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+        vm.prank(subSub);
+        vm.expectRevert(BIPAgentIDGate.CannotSubDelegate.selector);
+        gate.subDelegate(child, stranger, uint64(block.timestamp + 1 hours));
+    }
+
+    function test_SubDelegate_DiesWithParent() public {
+        _registerAlice();
+        uint256 parent = _grantFromAlice();
+        vm.prank(subAgent);
+        uint256 child = gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+        assertTrue(gate.isAuthorized(alice, subSub, SCOPE_ALERTS, child));
+
+        vm.prank(alice);
+        gate.revokeCapability(parent);
+        assertFalse(gate.isAuthorized(alice, subSub, SCOPE_ALERTS, child));
+    }
+
+    // -------------------------------------------------------------------------
+    // Pause / ownership — owner powers are pause-only, no capability control
+    // -------------------------------------------------------------------------
+
+    function test_Pause_BlocksRegisterAndGrant() public {
+        vm.prank(admin);
+        gate.pause();
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.PausedError.selector);
+        gate.registerAgent(AGENT_ALICE);
+
+        vm.prank(admin);
+        gate.unpause();
+        _registerAlice();
+
+        vm.prank(admin);
+        gate.pause();
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.PausedError.selector);
+        gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 1 days));
+    }
+
+    function test_OwnerCannotRevokeUserCapability() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+
+        vm.prank(admin);
+        vm.expectRevert(BIPAgentIDGate.NotGrantor.selector);
+        gate.revokeCapability(id);
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+    }
+
+    function test_Pause_OnlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.NotOwner.selector);
+        gate.pause();
+    }
+}
