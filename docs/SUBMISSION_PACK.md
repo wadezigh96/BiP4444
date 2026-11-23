@@ -14,6 +14,9 @@ BIP4444 — Binance Intelligence Passport
 **Website**
 https://bips4444.vercel.app — live demo: https://bips4444.vercel.app/agent-id-demo.html
 
+**Reward receiving address**
+`0xFf265912c76342c8469cE18aB9DF0B2f37d9373c` (BIP4444-Treasury, 2-of-2 Safe)
+
 **Contract addresses (BNB Smart Chain)**
 - BIPAgentIDGate: `[GATE_ADDRESS after deploy]`
 - BIPMembershipController: `[CONTROLLER_ADDRESS if deployed, else "to be deployed"]`

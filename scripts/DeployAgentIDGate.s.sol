@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
 import {BIPAgentIDGate} from "../contracts/src/BIPAgentIDGate.sol";
 
 /// @title Deploy BIPAgentIDGate
@@ -19,7 +20,7 @@ import {BIPAgentIDGate} from "../contracts/src/BIPAgentIDGate.sol";
 ///   3. Submit the deployed address in the hackathon submission form.
 contract DeployAgentIDGate is Script {
     // BSC mainnet — SPACE ID Agent ID (ERC-721, non-transferable)
-    address constant AGENT_ID = 0x60b9262456de011f7d15a54cdd8c48baaa8b022f;
+    address constant AGENT_ID = 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F;
 
     // BSC mainnet — ERC-8004 Identity Registry (proxy)
     address constant ERC8004_IDENTITY = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
