@@ -148,7 +148,11 @@ contract BIPAgentIDGate {
     // Views
     // -------------------------------------------------------------------------
     /// @notice True if `wallet` currently holds an Agent ID.
+    /// @dev The real Agent ID contract reverts on balanceOf(address(0))
+    ///      (standard ERC-721 behaviour, verified on BSC 2026-11-23), so the
+    ///      zero address is short-circuited here instead of propagating a revert.
     function hasAgentID(address wallet) public view returns (bool) {
+        if (wallet == address(0)) return false;
         return agentID.balanceOf(wallet) > 0;
     }
 
@@ -211,14 +215,38 @@ contract BIPAgentIDGate {
     // -------------------------------------------------------------------------
     // Registration — bind an ERC-8004 agent to its operator's Agent ID wallet
     // -------------------------------------------------------------------------
+    /// @notice Register as an operator with Agent ID only (no ERC-8004 agent).
+    /// @dev This is the low-friction entry path: one transaction by any
+    ///      Agent ID holder activates capability granting. The wallet can
+    ///      later upgrade to a full ERC-8004 binding via registerAgent.
+    ///      Stored with erc8004AgentId = 0 as the operator-only sentinel.
+    function registerOperator() external whenNotPaused {
+        if (!hasAgentID(msg.sender)) revert NoAgentID();
+        if (_bindings[msg.sender].active) revert AlreadyBound();
+
+        _bindings[msg.sender] = AgentBinding({
+            erc8004AgentId: 0,
+            boundAt: uint64(block.timestamp),
+            active: true
+        });
+
+        _countInteractor(msg.sender);
+
+        emit AgentRegistered(msg.sender, 0);
+    }
+
     /// @notice Bind your ERC-8004 agent identity to your wallet.
     /// @dev Caller must (a) currently own the ERC-8004 agent and
     ///      (b) hold an Agent ID. One active binding per wallet and per agent.
+    ///      An operator-only registration (registerOperator) is upgraded in
+    ///      place instead of reverting.
     function registerAgent(uint256 erc8004AgentId) external whenNotPaused {
         if (erc8004AgentId == 0) revert ZeroAgentId();
         if (!hasAgentID(msg.sender)) revert NoAgentID();
         if (identityRegistry.ownerOf(erc8004AgentId) != msg.sender) revert NotAgentOwner();
-        if (_bindings[msg.sender].active) revert AlreadyBound();
+
+        AgentBinding storage existing = _bindings[msg.sender];
+        if (existing.active && existing.erc8004AgentId != 0) revert AlreadyBound();
         if (_agentWallet[erc8004AgentId] != address(0)) revert AgentAlreadyBound();
 
         _bindings[msg.sender] = AgentBinding({
@@ -228,14 +256,18 @@ contract BIPAgentIDGate {
         });
         _agentWallet[erc8004AgentId] = msg.sender;
 
-        if (!_countedInteractor[msg.sender]) {
-            _countedInteractor[msg.sender] = true;
+        _countInteractor(msg.sender);
+
+        emit AgentRegistered(msg.sender, erc8004AgentId);
+    }
+
+    function _countInteractor(address wallet) internal {
+        if (!_countedInteractor[wallet]) {
+            _countedInteractor[wallet] = true;
             unchecked {
                 _uniqueAgentIDInteractors += 1;
             }
         }
-
-        emit AgentRegistered(msg.sender, erc8004AgentId);
     }
 
     /// @notice Remove your binding. All capabilities you granted immediately

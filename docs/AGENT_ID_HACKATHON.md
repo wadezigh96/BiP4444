@@ -10,7 +10,7 @@ Total prize pool: 60,000 USDC (Project Awards + Community Promotion).
 |---|---|
 | Agent ID interface (minimal, `balanceOf`) | `contracts/interfaces/IAgentID.sol` |
 | Agent ID gate + delegated capabilities | `contracts/src/BIPAgentIDGate.sol` |
-| Unit tests (23) | `test/BIPAgentIDGate.t.sol` |
+| Unit tests (26) | `test/BIPAgentIDGate.t.sol` |
 | Mock Agent ID for tests | `test/mocks/MockAgentID.sol` |
 | Deploy script (BSC mainnet constants) | `scripts/DeployAgentIDGate.s.sol` |
 
@@ -23,10 +23,17 @@ Agent ID (SPACE ID, `name.ai`, non-transferable ERC-721) at
 `0x60b9262456de011f7d15a54cdd8c48baaa8b022f` on BNB Smart Chain is the
 **root identity** of the system:
 
-1. **Binding** — `registerAgent(erc8004AgentId)` requires the caller to
-   (a) own the ERC-8004 agent (`0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`)
-   and (b) hold an Agent ID (`balanceOf(caller) > 0`, the check prescribed
-   by the hackathon rules). One active binding per wallet and per agent.
+1. **Binding** — two entry paths, both gated by Agent ID
+   (`balanceOf(caller) > 0`, the check prescribed by the hackathon rules):
+   `registerOperator()` for any Agent ID holder (one transaction, no other
+   prerequisite — the low-friction path used for the 30-holder minimum),
+   and `registerAgent(erc8004AgentId)`, which additionally requires owning
+   the ERC-8004 agent (`0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`) and
+   upgrades an operator registration in place. One active binding per
+   wallet and per agent. Live verification of the Agent ID contract
+   itself: `docs/evidence/AGENT_ID_BSC_2026-11-23.md` (note: its
+   `balanceOf(address(0))` reverts per standard ERC-721; the gate
+   short-circuits the zero address).
 2. **Delegated capabilities** — a bound operator grants narrowly scoped,
    expiring capabilities to delegate addresses (sub-agents) with
    `grantCapability(delegate, scope, expiresAt)`. Scopes are `bytes32`,
@@ -68,7 +75,7 @@ and `totalCapabilityGrants()`.
 
 ## Test evidence
 
-`forge test` — 54 passed, 0 failed (23 new gate tests + 31 existing
+`forge test` — 57 passed, 0 failed (26 new gate tests + 31 existing
 membership tests), Foundry 1.10.0 / solc 0.8.39, 2026-11-23.
 
 Note: two placeholder address literals in the pre-existing membership test

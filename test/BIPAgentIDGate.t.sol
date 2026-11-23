@@ -76,6 +76,9 @@ contract BIPAgentIDGateTest is Test {
     function test_HasAgentID() public view {
         assertTrue(gate.hasAgentID(alice));
         assertFalse(gate.hasAgentID(stranger));
+        // zero address must return false, not propagate the real
+        // ERC-721 contract's balanceOf(address(0)) revert
+        assertFalse(gate.hasAgentID(address(0)));
     }
 
     // -------------------------------------------------------------------------
@@ -143,6 +146,54 @@ contract BIPAgentIDGateTest is Test {
         vm.prank(bob);
         gate.registerAgent(AGENT_BOB);
         assertEq(gate.uniqueAgentIDInteractors(), 2);
+    }
+
+    // -------------------------------------------------------------------------
+    // Operator-only registration (Agent ID only, low-friction path)
+    // -------------------------------------------------------------------------
+
+    function test_RegisterOperator_Success_AndCanGrant() public {
+        vm.prank(bob);
+        vm.expectEmit(true, true, false, true);
+        emit AgentRegistered(bob, 0);
+        gate.registerOperator();
+
+        assertTrue(gate.isRegistered(bob));
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+
+        // operator-only wallets can grant capabilities immediately
+        vm.prank(bob);
+        uint256 id = gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 1 days));
+        assertTrue(gate.isAuthorized(bob, subAgent, SCOPE_ALERTS, id));
+    }
+
+    function test_RegisterOperator_RevertsWithoutAgentID() public {
+        agentID.setBalance(stranger, 0);
+        vm.prank(stranger);
+        vm.expectRevert(BIPAgentIDGate.NoAgentID.selector);
+        gate.registerOperator();
+    }
+
+    function test_RegisterOperator_UpgradesToAgentBinding() public {
+        vm.prank(alice);
+        gate.registerOperator();
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+
+        // upgrade in place to a full ERC-8004 binding, counted once
+        vm.prank(alice);
+        gate.registerAgent(AGENT_ALICE);
+        assertEq(gate.uniqueAgentIDInteractors(), 1);
+        assertEq(gate.walletOfAgent(AGENT_ALICE), alice);
+
+        (uint256 boundId,, bool active) = gate.bindingOf(alice);
+        assertEq(boundId, AGENT_ALICE);
+        assertTrue(active);
+
+        // a second full binding still reverts
+        identity.setOwner(AGENT_BOB, alice);
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.AlreadyBound.selector);
+        gate.registerAgent(AGENT_BOB);
     }
 
     // -------------------------------------------------------------------------
