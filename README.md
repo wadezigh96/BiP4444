@@ -35,7 +35,9 @@ Alert Shield
 | Component | Location | Notes |
 |-----------|----------|-------|
 | Membership controller | `contracts/src/BIPMembershipController.sol` | Cap, register, registerFor, pause, revoke |
+| Agent ID gate | `contracts/src/BIPAgentIDGate.sol` | Agent ID root identity + delegated capabilities (Binance Agent ID Hackathon) |
 | Unit tests | `test/BIPMembershipController.t.sol` | Includes Path A tests |
+| Gate tests | `test/BIPAgentIDGate.t.sol` | Agent ID binding, capabilities, fail-closed authorization |
 | Relayer skeleton | `scripts/relayer-x402-example.js` | verify → settle → registerFor + refund flag |
 | Alert Shield verify | `public/js/alert-verify.js` | Web Crypto Ed25519 |
 | Alert demo | `public/alert-demo.html` | |
@@ -44,6 +46,7 @@ Alert Shield
 
 ## Quick links
 
+- [Agent ID Hackathon integration](docs/AGENT_ID_HACKATHON.md)
 - [Setup path to usable system](docs/SETUP.md)
 - [Membership controller](docs/MEMBERSHIP_CONTROLLER.md)
 - [x402 / Relayer](docs/X402_REQUIREMENTS.md) · [RELAYER.md](docs/RELAYER.md)
@@ -59,6 +62,7 @@ Alert Shield
 | USDT (BSC) | `0x55d398326f99059fF775485246999027B3197955` |
 | payTo (Safe 2-of-2) | `0xFf265912c76342c8469cE18aB9DF0B2f37d9373c` |
 | ERC-8004 Identity | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Agent ID (SPACE ID) | `0x60b9262456de011f7d15a54cdd8c48baaa8b022f` |
 | Official domain | `bips4444.vercel.app` |
 
 ## Scope boundaries
