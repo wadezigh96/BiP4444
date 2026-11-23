@@ -10,7 +10,7 @@ Total prize pool: 60,000 USDC (Project Awards + Community Promotion).
 |---|---|
 | Agent ID interface (minimal, `balanceOf`) | `contracts/interfaces/IAgentID.sol` |
 | Agent ID gate + delegated capabilities | `contracts/src/BIPAgentIDGate.sol` |
-| Unit tests (26) | `test/BIPAgentIDGate.t.sol` |
+| Unit tests (36) | `test/BIPAgentIDGate.t.sol` |
 | Mock Agent ID for tests | `test/mocks/MockAgentID.sol` |
 | Deploy script (BSC mainnet constants) | `scripts/DeployAgentIDGate.s.sol` |
 
@@ -50,6 +50,44 @@ On-chain metrics exposed for the hackathon's growth measurement:
 `uniqueAgentIDInteractors()` (distinct Agent ID wallets that registered)
 and `totalCapabilityGrants()`.
 
+## Innovative architecture — what makes BIP4444 rare
+
+```
+Agent ID (name.ai, human-claimed, non-transferable)
+   │  root of trust — checked live on every authorization
+   ▼
+BIPAgentIDGate ── binding ──► ERC-8004 agent identity (optional upgrade)
+   │
+   ├─ Delegated capabilities: scoped, expiring, grantor-revocable
+   ├─ Attenuated sub-delegation: depth 1, same scope, shorter life,
+   │    dies with its parent (capability attenuation on-chain)
+   └─ Incident response: panic freeze + guardian rescue freeze,
+        24h-cooldown unfreeze — authorization has a kill switch
+```
+
+Three features most identity-gate projects do not have:
+
+1. **Founding 44 (free mint).** The first 44 distinct Agent ID operators
+   claim an on-chain founding seat (`foundingSeatOf`, seats assigned in
+   registration order, never reassigned). Founding wallets get the
+   BIP4444 membership fee (5 USDT via the x402 relayer) **waived** — the
+   relayer checks `isFounding` on-chain before charging. A seat is a
+   registry record, **not** an NFT (BIP4444 principle: no second passport
+   NFT), is non-transferable, and promises no returns — only the fee
+   waiver and a verifiable founding badge. Gas remains the user's own.
+2. **Panic freeze + guardian rescue.** An operator can freeze their own
+   wallet instantly — every authorization dies and new grants block —
+   and can nominate a guardian who may freeze (only freeze) on their
+   behalf if a key is lost. Unfreeze is operator-only after a 24-hour
+   cooldown, so a thief holding a stolen key cannot instantly undo a
+   rescue freeze. Revocation remains available while frozen for cleanup.
+3. **Attenuated sub-delegation.** A delegate can pass a capability one
+   level down with the same scope and a strictly shorter-or-equal life;
+   the child dies automatically when the parent is revoked or expires,
+   and the root grantor can revoke the whole chain. Delegation that can
+   only ever *narrow* — the ANONYMESH/BIP4444 bounded-authority principle,
+   enforced on-chain.
+
 ## Red-line compliance (hackathon rules)
 
 - No QR-code / pairing-code web login for Agentic Wallet; no session storage.
@@ -75,7 +113,7 @@ and `totalCapabilityGrants()`.
 
 ## Test evidence
 
-`forge test` — 57 passed, 0 failed (26 new gate tests + 31 existing
+`forge test` — 67 passed, 0 failed (36 new gate tests + 31 existing
 membership tests), Foundry 1.10.0 / solc 0.8.39, 2026-11-23.
 
 Note: two placeholder address literals in the pre-existing membership test

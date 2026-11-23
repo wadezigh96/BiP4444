@@ -63,6 +63,19 @@
       <p class="muted">Every grant is an explicit transaction in <em>your</em> wallet. The gate holds no assets and never signs for you.</p>
     </div>
 
+    <div class="card">
+      <h2>5 · Incident response — panic freeze &amp; guardian</h2>
+      <p class="muted">Key compromised? Freeze kills every authorization from your wallet instantly.
+      A guardian you nominate can freeze for you if you lose your key — but can never unfreeze or move anything.
+      Unfreeze is operator-only, after a 24-hour cooldown.</p>
+      <label class="muted" for="guardianInput">Guardian address (optional)</label>
+      <input id="guardianInput" placeholder="0x…" autocomplete="off" />
+      <button id="guardianBtn" disabled>Set guardian</button>
+      <button id="freezeBtn" disabled style="margin-left:0.5rem;">Panic freeze</button>
+      <button id="unfreezeBtn" disabled style="margin-left:0.5rem;">Unfreeze (after 24h)</button>
+      <div id="freezeResult" style="margin-top:1rem;"></div>
+    </div>
+
     <p class="muted"><a href="/">← Back</a> · Agent ID contract:
       <a href="https://bscscan.com/address/0x60b9262456de011f7d15a54cdd8c48baaa8b022f" target="_blank" rel="noopener">0x60b9…022f</a>
       · <a href="https://github.com/wadezigh96/BiP4444/blob/main/docs/AGENT_ID_HACKATHON.md" target="_blank" rel="noopener">How it works</a></p>
@@ -80,8 +93,8 @@
       $("gateNotice").innerHTML = "Gate live at <code>" + GATE_ADDRESS + "</code>.";
       try {
         const gate = gateContract(readProvider());
-        const [n, g] = await Promise.all([gate.uniqueAgentIDInteractors(), gate.totalCapabilityGrants()]);
-        $("gateStats").textContent = "On-chain so far: " + n.toString() + " Agent ID holders registered · " + g.toString() + " capabilities granted.";
+        const [n, g, f] = await Promise.all([gate.uniqueAgentIDInteractors(), gate.totalCapabilityGrants(), gate.foundingCount()]);
+        $("gateStats").textContent = "On-chain so far: " + n.toString() + " Agent ID holders registered · " + g.toString() + " capabilities granted · Founding 44 seats claimed: " + f.toString() + "/44 (first 44 operators mint free — membership fee waived).";
       } catch (e) { /* stats are best-effort */ }
     }
 
@@ -108,6 +121,9 @@
         $("operatorBtn").disabled = !gateOn;
         $("registerBtn").disabled = !gateOn;
         $("grantBtn").disabled = !gateOn;
+        $("guardianBtn").disabled = !gateOn;
+        $("freezeBtn").disabled = !gateOn;
+        $("unfreezeBtn").disabled = !gateOn;
       } catch (e) { el.innerHTML = '<span class="err">' + e.message + "</span>"; }
     };
 
@@ -132,6 +148,20 @@
         el.innerHTML = '<span class="ok">✓ Agent bound. Your wallet is now a registered BIP4444 operator.</span>';
       } catch (e) { el.innerHTML = '<span class="err">' + (e.shortMessage || e.message) + "</span>"; }
     };
+
+    async function sendGate(method, args, el, okMsg) {
+      try {
+        const gate = gateContract(signer);
+        const tx = await gate[method](...args);
+        el.textContent = "Transaction sent: " + tx.hash + " — waiting for confirmation…";
+        await tx.wait();
+        el.innerHTML = '<span class="ok">✓ ' + okMsg + "</span>";
+      } catch (e) { el.innerHTML = '<span class="err">' + (e.shortMessage || e.message) + "</span>"; }
+    }
+
+    $("guardianBtn").onclick = () => sendGate("setGuardian", [$("guardianInput").value.trim()], $("freezeResult"), "Guardian set.");
+    $("freezeBtn").onclick = () => sendGate("freeze", [], $("freezeResult"), "Frozen. All authorizations from your wallet are now dead.");
+    $("unfreezeBtn").onclick = () => sendGate("unfreeze", [], $("freezeResult"), "Unfrozen.");
 
     $("grantBtn").onclick = async () => {
       const el = $("grantResult");

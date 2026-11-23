@@ -50,10 +50,24 @@ contract BIPAgentIDGate {
     // -------------------------------------------------------------------------
     // Storage
     // -------------------------------------------------------------------------
+    /// @notice Number of Founding seats: the first 44 Agent ID operators.
+    /// @dev Founding 44 is BIP4444's free-mint cohort — the membership fee
+    ///      (5 USDT via the x402 relayer) is waived for these wallets,
+    ///      enforced by the relayer checking `isFounding` on-chain. A seat
+    ///      is a registry record only: NOT an NFT (BIP4444 has no second
+    ///      passport NFT), non-transferable, and carries no promise of
+    ///      returns — only the fee waiver and a verifiable founding badge.
+    uint256 public constant FOUNDING_SEATS = 44;
+
+    /// @notice Minimum time a freeze must stand before the operator can unfreeze.
+    uint64 public constant FREEZE_COOLDOWN = 24 hours;
+
     struct AgentBinding {
         uint256 erc8004AgentId;
         uint64 boundAt;
         bool active;
+        bool frozen;
+        uint64 frozenAt;
     }
 
     struct Capability {
@@ -62,7 +76,18 @@ contract BIPAgentIDGate {
         bytes32 scope;
         uint64 expiresAt;
         bool revoked;
+        /// @dev 0 = root capability granted by the operator.
+        ///      Non-zero = attenuated sub-delegation of that parent capability:
+        ///      same scope, expiry never exceeding the parent's, depth 1 only.
+        uint256 parentId;
     }
+
+    /// @dev operator wallet => guardian wallet allowed to trigger an emergency freeze
+    mapping(address => address) private _guardians;
+
+    /// @dev wallet => founding seat number (1..44), 0 = not founding
+    mapping(address => uint256) private _foundingSeat;
+    uint256 private _foundingCount;
 
     /// @dev operator wallet => binding to its ERC-8004 agent identity
     mapping(address => AgentBinding) private _bindings;
@@ -97,6 +122,13 @@ contract BIPAgentIDGate {
         uint64 expiresAt
     );
     event CapabilityRevoked(uint256 indexed capabilityId, address indexed grantor);
+    event FoundingSeatClaimed(address indexed wallet, uint256 indexed seat);
+    event GuardianSet(address indexed operator, address indexed guardian);
+    event Frozen(address indexed operator, address indexed by);
+    event Unfrozen(address indexed operator);
+    event CapabilitySubDelegated(
+        uint256 indexed capabilityId, uint256 indexed parentId, address indexed delegate, address subDelegate
+    );
     event Paused(address account);
     event Unpaused(address account);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
@@ -120,6 +152,13 @@ contract BIPAgentIDGate {
     error UnknownCapability();
     error NotGrantor();
     error AlreadyRevoked();
+    error FrozenError();
+    error NotFrozenError();
+    error NotGuardian();
+    error FreezeCooldownActive();
+    error NotDelegate();
+    error CannotSubDelegate();
+    error ExpiryExceedsParent();
 
     // -------------------------------------------------------------------------
     // Modifiers
@@ -177,11 +216,32 @@ contract BIPAgentIDGate {
     function capabilityOf(uint256 capabilityId)
         external
         view
-        returns (address grantor, address delegate, bytes32 scope, uint64 expiresAt, bool revoked)
+        returns (address grantor, address delegate, bytes32 scope, uint64 expiresAt, bool revoked, uint256 parentId)
     {
         Capability storage c = _capabilities[capabilityId];
         if (c.grantor == address(0)) revert UnknownCapability();
-        return (c.grantor, c.delegate, c.scope, c.expiresAt, c.revoked);
+        return (c.grantor, c.delegate, c.scope, c.expiresAt, c.revoked, c.parentId);
+    }
+
+    /// @notice Founding seat of a wallet (1..44), or 0 if not founding.
+    function foundingSeatOf(address wallet) external view returns (uint256) {
+        return _foundingSeat[wallet];
+    }
+
+    function isFounding(address wallet) external view returns (bool) {
+        return _foundingSeat[wallet] != 0;
+    }
+
+    function foundingCount() external view returns (uint256) {
+        return _foundingCount;
+    }
+
+    function guardianOf(address operator) external view returns (address) {
+        return _guardians[operator];
+    }
+
+    function isFrozen(address operator) external view returns (bool) {
+        return _bindings[operator].frozen;
     }
 
     /// @notice Number of distinct Agent ID holder wallets that have registered.
@@ -208,7 +268,14 @@ contract BIPAgentIDGate {
         if (c.revoked) return false;
         if (block.timestamp > c.expiresAt) return false;
         if (!_bindings[grantor].active) return false;
+        if (_bindings[grantor].frozen) return false;
         if (!hasAgentID(grantor)) return false;
+        // Attenuation chain: a sub-delegation lives and dies with its parent.
+        if (c.parentId != 0) {
+            Capability storage p = _capabilities[c.parentId];
+            if (p.revoked) return false;
+            if (block.timestamp > p.expiresAt) return false;
+        }
         return true;
     }
 
@@ -227,7 +294,9 @@ contract BIPAgentIDGate {
         _bindings[msg.sender] = AgentBinding({
             erc8004AgentId: 0,
             boundAt: uint64(block.timestamp),
-            active: true
+            active: true,
+            frozen: false,
+            frozenAt: 0
         });
 
         _countInteractor(msg.sender);
@@ -252,7 +321,9 @@ contract BIPAgentIDGate {
         _bindings[msg.sender] = AgentBinding({
             erc8004AgentId: erc8004AgentId,
             boundAt: uint64(block.timestamp),
-            active: true
+            active: true,
+            frozen: existing.frozen,
+            frozenAt: existing.frozenAt
         });
         _agentWallet[erc8004AgentId] = msg.sender;
 
@@ -266,6 +337,17 @@ contract BIPAgentIDGate {
             _countedInteractor[wallet] = true;
             unchecked {
                 _uniqueAgentIDInteractors += 1;
+            }
+
+            // Founding 44: the first 44 distinct Agent ID operators claim a
+            // seat in registration order. First-come, recorded on-chain,
+            // never reassigned — unregistering does not free a seat.
+            if (_foundingCount < FOUNDING_SEATS) {
+                unchecked {
+                    _foundingCount += 1;
+                }
+                _foundingSeat[wallet] = _foundingCount;
+                emit FoundingSeatClaimed(wallet, _foundingCount);
             }
         }
     }
@@ -301,6 +383,7 @@ contract BIPAgentIDGate {
         returns (uint256 capabilityId)
     {
         if (!_bindings[msg.sender].active) revert NotBound();
+        if (_bindings[msg.sender].frozen) revert FrozenError();
         if (!hasAgentID(msg.sender)) revert NoAgentID();
         if (delegate == address(0) || delegate == msg.sender) revert InvalidDelegate();
         if (scope == bytes32(0)) revert ZeroScope();
@@ -312,7 +395,8 @@ contract BIPAgentIDGate {
             delegate: delegate,
             scope: scope,
             expiresAt: expiresAt,
-            revoked: false
+            revoked: false,
+            parentId: 0
         });
 
         unchecked {
@@ -331,6 +415,100 @@ contract BIPAgentIDGate {
 
         c.revoked = true;
         emit CapabilityRevoked(capabilityId, msg.sender);
+    }
+
+    /// @notice Attenuated sub-delegation: a delegate passes its capability
+    ///         one level down — same scope, expiry never beyond the parent's.
+    /// @dev Rare-by-design constraints: depth is capped at 1 (a sub-delegated
+    ///      capability cannot be sub-delegated again), the scope can never
+    ///      widen, and the child dies automatically when the parent is
+    ///      revoked or expires (checked in isAuthorized). The root grantor
+    ///      stays the capability's grantor, so the operator can always see
+    ///      and revoke the whole chain.
+    function subDelegate(uint256 parentId, address subDelegate_, uint64 expiresAt)
+        external
+        whenNotPaused
+        returns (uint256 capabilityId)
+    {
+        Capability storage p = _capabilities[parentId];
+        if (p.grantor == address(0)) revert UnknownCapability();
+        if (p.parentId != 0) revert CannotSubDelegate();
+        if (p.delegate != msg.sender) revert NotDelegate();
+        if (p.revoked) revert AlreadyRevoked();
+        if (_bindings[p.grantor].frozen) revert FrozenError();
+        if (subDelegate_ == address(0) || subDelegate_ == msg.sender || subDelegate_ == p.grantor) {
+            revert InvalidDelegate();
+        }
+        if (expiresAt <= block.timestamp) revert InvalidExpiry();
+        if (expiresAt > p.expiresAt) revert ExpiryExceedsParent();
+
+        capabilityId = _nextCapabilityId++;
+        _capabilities[capabilityId] = Capability({
+            grantor: p.grantor,
+            delegate: subDelegate_,
+            scope: p.scope,
+            expiresAt: expiresAt,
+            revoked: false,
+            parentId: parentId
+        });
+
+        unchecked {
+            _totalCapabilityGrants += 1;
+        }
+
+        emit CapabilityGranted(capabilityId, p.grantor, subDelegate_, p.scope, expiresAt);
+        emit CapabilitySubDelegated(capabilityId, parentId, msg.sender, subDelegate_);
+    }
+
+    // -------------------------------------------------------------------------
+    // Incident response — panic freeze & guardian rescue
+    // -------------------------------------------------------------------------
+    /// @notice Set (or clear, with address(0)) the guardian allowed to freeze
+    ///         your operator wallet in an emergency. The guardian can ONLY
+    ///         freeze — never unfreeze, grant, revoke, or move anything.
+    function setGuardian(address guardian) external whenNotPaused {
+        if (!_bindings[msg.sender].active) revert NotBound();
+        if (guardian == msg.sender) revert InvalidDelegate();
+        _guardians[msg.sender] = guardian;
+        emit GuardianSet(msg.sender, guardian);
+    }
+
+    /// @notice Panic freeze: immediately kills every authorization from your
+    ///         wallet (isAuthorized fails) and blocks new grants. Use when a
+    ///         key or a sub-agent is compromised. Revocation stays available
+    ///         while frozen so you can clean up during the incident.
+    function freeze() external whenNotPaused {
+        _freeze(msg.sender, msg.sender);
+    }
+
+    /// @notice Guardian-triggered freeze for an operator who lost their key.
+    function guardianFreeze(address operator) external whenNotPaused {
+        if (_guardians[operator] == address(0) || _guardians[operator] != msg.sender) revert NotGuardian();
+        _freeze(operator, msg.sender);
+    }
+
+    function _freeze(address operator, address by) internal {
+        AgentBinding storage b = _bindings[operator];
+        if (!b.active) revert NotBound();
+        if (b.frozen) revert FrozenError();
+        b.frozen = true;
+        b.frozenAt = uint64(block.timestamp);
+        emit Frozen(operator, by);
+    }
+
+    /// @notice Unfreeze your own wallet after FREEZE_COOLDOWN (24h) has
+    ///         passed since the freeze. The cooldown stops a thief holding
+    ///         a stolen key from instantly undoing a guardian's rescue
+    ///         freeze. Only the operator can unfreeze — not the guardian,
+    ///         not the contract owner.
+    function unfreeze() external whenNotPaused {
+        AgentBinding storage b = _bindings[msg.sender];
+        if (!b.active) revert NotBound();
+        if (!b.frozen) revert NotFrozenError();
+        if (block.timestamp < uint256(b.frozenAt) + FREEZE_COOLDOWN) revert FreezeCooldownActive();
+        b.frozen = false;
+        b.frozenAt = 0;
+        emit Unfrozen(msg.sender);
     }
 
     // -------------------------------------------------------------------------

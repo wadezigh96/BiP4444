@@ -322,6 +322,177 @@ contract BIPAgentIDGateTest is Test {
     }
 
     // -------------------------------------------------------------------------
+    // Founding 44 — free-mint cohort, first come, on-chain seats
+    // -------------------------------------------------------------------------
+
+    function test_Founding_FirstRegistrantsGetSeatsInOrder() public {
+        _registerAlice();
+        assertEq(gate.foundingSeatOf(alice), 1);
+        assertTrue(gate.isFounding(alice));
+
+        vm.prank(bob);
+        gate.registerOperator();
+        assertEq(gate.foundingSeatOf(bob), 2);
+        assertEq(gate.foundingCount(), 2);
+        assertFalse(gate.isFounding(stranger));
+    }
+
+    function test_Founding_CapsAt44() public {
+        for (uint256 i = 0; i < 45; i++) {
+            address w = address(uint160(0x10000 + i));
+            agentID.setBalance(w, 1);
+            vm.prank(w);
+            gate.registerOperator();
+        }
+        assertEq(gate.foundingCount(), 44);
+        assertEq(gate.uniqueAgentIDInteractors(), 45);
+        assertEq(gate.foundingSeatOf(address(uint160(0x10000 + 43))), 44);
+        // 45th registrant is a normal operator, no seat
+        assertEq(gate.foundingSeatOf(address(uint160(0x10000 + 44))), 0);
+    }
+
+    function test_Founding_SeatSurvivesUnregister() public {
+        _registerAlice();
+        vm.prank(alice);
+        gate.unregisterAgent();
+        assertTrue(gate.isFounding(alice));
+        assertEq(gate.foundingSeatOf(alice), 1);
+    }
+
+    // -------------------------------------------------------------------------
+    // Panic freeze & guardian rescue
+    // -------------------------------------------------------------------------
+
+    address internal guardian = address(0x6A12D);
+
+    function test_Freeze_KillsAuthorizationAndBlocksGrants() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        vm.prank(alice);
+        gate.freeze();
+        assertTrue(gate.isFrozen(alice));
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.FrozenError.selector);
+        gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 1 days));
+
+        // revocation still works while frozen (incident cleanup)
+        vm.prank(alice);
+        gate.revokeCapability(id);
+    }
+
+    function test_Unfreeze_RequiresCooldown() public {
+        _registerAlice();
+        // 7-day capability so it outlives the 24h freeze cooldown
+        vm.prank(alice);
+        uint256 id = gate.grantCapability(subAgent, SCOPE_ALERTS, uint64(block.timestamp + 7 days));
+
+        vm.prank(alice);
+        gate.freeze();
+
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.FreezeCooldownActive.selector);
+        gate.unfreeze();
+
+        vm.warp(block.timestamp + 24 hours + 1);
+        vm.prank(alice);
+        gate.unfreeze();
+        assertFalse(gate.isFrozen(alice));
+        assertTrue(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+    }
+
+    function test_GuardianFreeze_OnlyGuardian_AndGuardianCannotUnfreeze() public {
+        _registerAlice();
+        uint256 id = _grantFromAlice();
+
+        vm.prank(alice);
+        gate.setGuardian(guardian);
+        assertEq(gate.guardianOf(alice), guardian);
+
+        vm.prank(stranger);
+        vm.expectRevert(BIPAgentIDGate.NotGuardian.selector);
+        gate.guardianFreeze(alice);
+
+        vm.prank(guardian);
+        gate.guardianFreeze(alice);
+        assertTrue(gate.isFrozen(alice));
+        assertFalse(gate.isAuthorized(alice, subAgent, SCOPE_ALERTS, id));
+
+        // guardian has no binding of its own: unfreeze is operator-only
+        vm.prank(guardian);
+        vm.expectRevert(BIPAgentIDGate.NotBound.selector);
+        gate.unfreeze();
+    }
+
+    function test_Freeze_DoubleFreezeAndBadUnfreezeRevert() public {
+        _registerAlice();
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.NotFrozenError.selector);
+        gate.unfreeze();
+
+        vm.prank(alice);
+        gate.freeze();
+        vm.prank(alice);
+        vm.expectRevert(BIPAgentIDGate.FrozenError.selector);
+        gate.freeze();
+    }
+
+    // -------------------------------------------------------------------------
+    // Attenuated sub-delegation (depth 1, same scope, shorter life)
+    // -------------------------------------------------------------------------
+
+    address internal subSub = address(0xBEEF);
+
+    function test_SubDelegate_Success() public {
+        _registerAlice();
+        uint256 parent = _grantFromAlice();
+
+        vm.prank(subAgent);
+        uint256 child = gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+
+        assertTrue(gate.isAuthorized(alice, subSub, SCOPE_ALERTS, child));
+        (,,,,, uint256 parentOfChild) = gate.capabilityOf(child);
+        assertEq(parentOfChild, parent);
+    }
+
+    function test_SubDelegate_AttenuationRules() public {
+        _registerAlice();
+        uint256 parent = _grantFromAlice();
+
+        // expiry beyond parent reverts
+        vm.prank(subAgent);
+        vm.expectRevert(BIPAgentIDGate.ExpiryExceedsParent.selector);
+        gate.subDelegate(parent, subSub, uint64(block.timestamp + 2 days));
+
+        // non-delegate cannot sub-delegate
+        vm.prank(bob);
+        vm.expectRevert(BIPAgentIDGate.NotDelegate.selector);
+        gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+
+        // depth capped at 1
+        vm.prank(subAgent);
+        uint256 child = gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+        vm.prank(subSub);
+        vm.expectRevert(BIPAgentIDGate.CannotSubDelegate.selector);
+        gate.subDelegate(child, stranger, uint64(block.timestamp + 1 hours));
+    }
+
+    function test_SubDelegate_DiesWithParent() public {
+        _registerAlice();
+        uint256 parent = _grantFromAlice();
+        vm.prank(subAgent);
+        uint256 child = gate.subDelegate(parent, subSub, uint64(block.timestamp + 12 hours));
+        assertTrue(gate.isAuthorized(alice, subSub, SCOPE_ALERTS, child));
+
+        vm.prank(alice);
+        gate.revokeCapability(parent);
+        assertFalse(gate.isAuthorized(alice, subSub, SCOPE_ALERTS, child));
+    }
+
+    // -------------------------------------------------------------------------
     // Pause / ownership — owner powers are pause-only, no capability control
     // -------------------------------------------------------------------------
 

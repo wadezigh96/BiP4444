@@ -47,8 +47,8 @@ delegate bounded capabilities, and every check fails closed.
 |---|---|---|
 | Agent ID Application Depth (30%) | Agent ID is load-bearing in 3 flows: binding, granting, and live authorization re-checks. Removing Agent ID breaks the product. | `BIPAgentIDGate.sol` (`registerAgent`, `grantCapability`, `isAuthorized`); live contract check in `docs/evidence/AGENT_ID_BSC_2026-11-23.md` |
 | Practicality & Feasibility (25%) | Real problem: agents acting with unbounded keys. BIP4444 gives operators bounded, expiring, revocable delegation anchored to a human-claimed identity. | Demo flow §3; Alert Shield + membership layers already in repo |
-| Product Completion (25%) | Working contracts + 57 passing tests, live demo page that checks Agent ID on BSC mainnet today, deploy script ready. | `forge test` 57/57; https://bips4444.vercel.app/agent-id-demo.html |
-| Innovation (20%) | First-class delegated-capability layer on top of Agent ID: scopes, expiry, fail-closed re-checks — Agent ID as an authorization root, not just an identity NFT. | Capability model in `docs/AGENT_ID_HACKATHON.md` |
+| Product Completion (25%) | Working contracts + 67 passing tests, live demo page that checks Agent ID on BSC mainnet today, deploy script ready. | `forge test` 67/67; https://bips4444.vercel.app/agent-id-demo.html |
+| Innovation (20%) | Delegated capabilities on Agent ID **plus** three rare features: Founding 44 free-mint seats (fee waived, on-chain, non-NFT), panic freeze with guardian rescue + 24h-cooldown unfreeze, and attenuated sub-delegation that can only narrow (depth 1, dies with parent). | Feature sections in `docs/AGENT_ID_HACKATHON.md`; tests `test_Founding_*`, `test_Freeze_*`, `test_GuardianFreeze_*`, `test_SubDelegate_*` |
 
 **Honest limits to state if asked:** pre-audit artifact; privacy layer
 (selective disclosure) is design, not implemented in this contract;
@@ -94,6 +94,11 @@ an Agent ID — one transaction from the demo page, no ERC-8004 agent
 required. The ERC-8004 binding (`registerAgent`) is an optional upgrade
 for operators who already run an agent identity; do not put it in front
 of drive participants.
+
+Recruiting hook (rule-compliant): the first 44 registrants claim a
+**Founding 44 seat** — their BIP4444 membership fee (5 USDT) is waived,
+verifiable on-chain via `isFounding`. That is a fee waiver, not a reward
+or a return: never promote it as earnings, and gas is still the user's.
 
 ## 5 · X posts (Community Promotion Award)
 

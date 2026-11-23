@@ -21,6 +21,13 @@ const GATE_ABI = [
   "function totalCapabilityGrants() view returns (uint256)",
   "function registerOperator()",
   "function registerAgent(uint256 erc8004AgentId)",
+  "function foundingCount() view returns (uint256)",
+  "function isFounding(address wallet) view returns (bool)",
+  "function foundingSeatOf(address wallet) view returns (uint256)",
+  "function setGuardian(address guardian)",
+  "function freeze()",
+  "function unfreeze()",
+  "function isFrozen(address operator) view returns (bool)",
   "function grantCapability(address delegate, bytes32 scope, uint64 expiresAt) returns (uint256)",
   "function isAuthorized(address grantor, address delegate, bytes32 scope, uint256 capabilityId) view returns (bool)",
 ];
